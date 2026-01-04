@@ -16,17 +16,18 @@ RingBuffer::RingBuffer()
 	}
 }
 
-int RingBuffer::GetAvailable()
+int RingBuffer::GetAvailable() const
 {
 	return mask(this->write.load() - this->read.load());
 }
+
 
 bool RingBuffer::PopFront(float& val)
 {
 	if (this->nextRead == this->localWrite)
 	{
 		int actualWrite = std::atomic_load_explicit(&this->write, std::memory_order_acquire);
-		if(this->nextRead == actualWrite)
+		if (this->nextRead == actualWrite)
 		{
 			return false;
 		}
@@ -73,12 +74,12 @@ bool RingBuffer::PushBack(float val)
 	return true;
 }
 
-int RingBuffer::inc(int val)
+int RingBuffer::inc(int val) const
 {
 	return mask(val + 1);
 }
 
-int RingBuffer::mask(int val)
+int RingBuffer::mask(int val) const
 {
 	return val & (BUFFER_CAPACITY - 1);
 }

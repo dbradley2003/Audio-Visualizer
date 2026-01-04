@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ANALYZER_GRAPHICS_SHARE_H
+#define ANALYZER_GRAPHICS_SHARE_H
 
 #include <mutex>
 #include <vector>
@@ -7,14 +8,14 @@
 
 struct AnalyzerGraphicsShare
 {
-	static const int SAMPLE_SIZE = 1024;
+	static constexpr int BUFFER_SIZE = 1024 / 2;
 	
 	AnalyzerGraphicsShare()
 		:
 		mtx(),
-		newDataReady(false)
+		newDataReady(false),
+		mailbox(std::make_shared<std::vector<float>>(BUFFER_SIZE))
 	{
-		this->mailbox = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
 	}
 	
 	void swapProducer(std::shared_ptr<std::vector<float>>& producerWriteBuffer)
@@ -41,3 +42,5 @@ struct AnalyzerGraphicsShare
 	std::atomic<bool> newDataReady;
 	std::shared_ptr<std::vector<float>> mailbox;
 };
+
+#endif

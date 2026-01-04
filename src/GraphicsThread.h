@@ -3,18 +3,14 @@
 
 #include <vector>
 #include <memory>
-#include <atomic>
-#include <mutex>
 
 struct AnalyzerGraphicsShare;
 
 class GraphicsThread {
 public:
-	static const int SAMPLE_SIZE = 1024;
+	static constexpr int READ_BUFFER_SIZE = 1024 / 2;
 
 	GraphicsThread(AnalyzerGraphicsShare& share_ag);
-
-
 	GraphicsThread(const GraphicsThread&) = delete;
 	GraphicsThread(GraphicsThread&&) = delete;
 	GraphicsThread& operator=(const GraphicsThread&) = delete;

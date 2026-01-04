@@ -4,10 +4,8 @@
 #include <valarray>
 #include <complex>
 #include <vector>
-#include <array>
-#include <atomic>
 #include <memory>
-#include <mutex>
+#include <array>
 
 class RingBuffer;
 struct AnalyzerGraphicsShare;
@@ -18,35 +16,28 @@ typedef std::valarray<ComplexValue> ComplexArray;
 class AnalyzerThread
 {
 public:
-	
-	static const int SAMPLE_SIZE = 1024;
 
-	//AnalyzerThread(RingBuffer& buffer, std::atomic<std::shared_ptr<std::vector<float>>>& _shared);
-	AnalyzerThread(
-		RingBuffer& buffer,
-		AnalyzerGraphicsShare& share_ag
-	);
+	static constexpr int SAMPLE_SIZE = 1024;
+	static constexpr int WRITE_BUFFER_SIZE = SAMPLE_SIZE / 2;
 
-	
+	AnalyzerThread(RingBuffer& buffer, AnalyzerGraphicsShare& share_ag);
 	AnalyzerThread(const AnalyzerThread&) = delete;
 	AnalyzerThread(AnalyzerThread&&) = delete;
 	AnalyzerThread& operator=(const AnalyzerThread&) = delete;
 	AnalyzerThread& operator=(AnalyzerThread&&) = delete;
-
 	void operator()();
 
 	void Update();
 	void fft(ComplexArray& data);
 	void GetSamples();
+	void InitHannTable();
 
 private:
-	RingBuffer& buffer;
-	std::vector<ComplexValue> samples;
-	std::vector<float> m_hannTable;
-
-	std::shared_ptr<std::vector<float>> current;
+	RingBuffer& ringBuffer;
+	std::array<ComplexValue, SAMPLE_SIZE> samples;
+	std::array<float, SAMPLE_SIZE> m_hannTable;
+	std::shared_ptr<std::vector<float>> outputBuffer;
 	ComplexArray data;
-
 	AnalyzerGraphicsShare& share_ag;
 };
 

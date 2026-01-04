@@ -12,17 +12,23 @@
 
 #define PI 3.14159265358979323846f
 
-AnalyzerThread::AnalyzerThread(RingBuffer& _buffer, AnalyzerGraphicsShare& share_ag)
+AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, AnalyzerGraphicsShare& _share_ag)
 	:
-	buffer(_buffer),
-	share_ag(share_ag)
+	ringBuffer(_ringBuffer),
+	share_ag(_share_ag),
+	outputBuffer(std::make_shared<std::vector<float>>(WRITE_BUFFER_SIZE))
 {
-	m_hannTable.reserve(SAMPLE_SIZE);
-	this->samples.reserve(SAMPLE_SIZE);
-	this->current = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
+	std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
+	std::fill(samples.begin(), samples.end(), 0);
+
+	this->InitHannTable();
+}
+
+void AnalyzerThread::InitHannTable()
+{
 	for (int i{}; i < SAMPLE_SIZE; ++i)
 	{
-		m_hannTable[i] = 0.54 - 0.46 * cosf(2.0f * PI * i / (SAMPLE_SIZE - 1));
+		this->m_hannTable[i] = 0.54 - 0.46 * cosf(2.0f * PI * i / (SAMPLE_SIZE - 1));
 	}
 }
 
@@ -85,11 +91,11 @@ void AnalyzerThread::operator()()
 void AnalyzerThread::GetSamples()
 {
 	float val;
-	int available = buffer.GetAvailable();
+	int available = ringBuffer.GetAvailable();
 	if (available > SAMPLE_SIZE) {
 		for (int i = 0; i < SAMPLE_SIZE; ++i)
 		{
-			buffer.PopFront(val);
+			ringBuffer.PopFront(val);
 			this->samples[i] = { val * this->m_hannTable[i], 0 };
 		}
 	}
@@ -98,8 +104,8 @@ void AnalyzerThread::GetSamples()
 void AnalyzerThread::Update()
 {
 	this->GetSamples();
-	data = ComplexArray(this->samples.data(), SAMPLE_SIZE);
-	fft(data);
+	this->data = ComplexArray(this->samples.data(), SAMPLE_SIZE);
+	this->fft(data);
 
 	const float invSixety = 1.0f / 60.0f;
 
@@ -108,9 +114,9 @@ void AnalyzerThread::Update()
 		float squaredMag = std::norm(this->samples[i]);
 		float db = 10.0f * log10f(squaredMag + 1e-12f);
 		float normalized = (db + 60.0f) * invSixety;
-		(*this->current)[i] = std::clamp(normalized, 0.0f, 1.0f);
+		(*this->outputBuffer)[i] = std::clamp(normalized, 0.0f, 1.0f);
 	}
 
 	// Make fresh data available to visualizer
-	this->share_ag.swapProducer(this->current);
+	this->share_ag.swapProducer(this->outputBuffer);
 }

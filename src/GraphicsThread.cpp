@@ -7,9 +7,10 @@
 #include "AnalyzerGraphicsShare.h"
 
 GraphicsThread::GraphicsThread(AnalyzerGraphicsShare& share_ag)
-	:share_ag(share_ag)
+	:
+	share_ag(share_ag),
+	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE))
 {
-	this->readBuffer = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
 }
 
 void DrawNeonBar(int x, int y, int width, int height, Color color)

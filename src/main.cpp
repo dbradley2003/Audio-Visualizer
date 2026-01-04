@@ -1,8 +1,5 @@
 #include <iostream>
 #include <thread>
-#include <vector>
-#include <atomic>
-#include <mutex>
 
 #include "RingBuffer.h"
 #include "AudioEngine.h"

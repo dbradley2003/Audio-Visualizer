@@ -79,8 +79,6 @@ bool AudioEngine::LoadFile(const std::string& filePath)
 	config.dataCallback = AudioEngine::ma_data_callback;
 	config.pUserData = this;
 
-	std::cout << "Sample Rate: " << config.sampleRate << std::endl;
-
 	if (ma_device_init(NULL, &config, &device) != MA_SUCCESS)
 	{
 		std::cout << "error ocurred initializing device" << std::endl;

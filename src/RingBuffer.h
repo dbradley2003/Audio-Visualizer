@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RING_BUFFER_H
+#define RING_BUFFER_H
 
 #include <atomic>
 
@@ -8,8 +9,8 @@
 class RingBuffer
 {
 public:
-	const static int BUFFER_CAPACITY = 1 << 15;
-	const static unsigned int CACHE_LINE = 64;
+	constexpr static unsigned BUFFER_CAPACITY = 1 << 15;
+	constexpr static unsigned CACHE_LINE = 64;
 
 	RingBuffer();
 	RingBuffer(const RingBuffer&) = delete;
@@ -20,13 +21,12 @@ public:
 
 	bool PushBack(float val);
 	bool PopFront(float& val);
-
-	int GetAvailable();
+	int GetAvailable() const;
 
 private:
 
-	int inc(int val);
-	int mask(int val);
+	int inc(int val) const;
+	int mask(int val) const;
 
 	alignas(CACHE_LINE) std::atomic<int> read{ 0 };
 	alignas(CACHE_LINE) std::atomic<int> write{ 0 };
@@ -46,4 +46,5 @@ private:
 	const int batchSize = 50;
 };
 
+#endif
 #pragma warning(pop)
