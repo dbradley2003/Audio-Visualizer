@@ -192,17 +192,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="miniaudio.cpp" />
     <ClCompile Include="src\AnalyzerThread.cpp" />
     <ClCompile Include="src\AudioEngine.cpp" />
     <ClCompile Include="src\GraphicsThread.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\miniaudio.cpp" />
     <ClCompile Include="src\RingBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\AnalyzerGraphicsShare.h" />
     <ClInclude Include="include\dj_fft.h" />
     <ClInclude Include="include\miniaudio.h" />
     <ClInclude Include="src\AnalyzerThread.h" />

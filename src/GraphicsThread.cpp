@@ -4,6 +4,13 @@
 #include <atomic>
 #include <iostream>
 #include <algorithm>
+#include "AnalyzerGraphicsShare.h"
+
+GraphicsThread::GraphicsThread(AnalyzerGraphicsShare& share_ag)
+	:share_ag(share_ag)
+{
+	this->readBuffer = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
+}
 
 void DrawNeonBar(int x, int y, int width, int height, Color color)
 {
@@ -16,21 +23,6 @@ void DrawNeonBar(int x, int y, int width, int height, Color color)
 
 	Color coreColor = ColorBrightness(color, 0.1f);
 	DrawRectangle(x, y, width, height, coreColor);
-}
-
-//GraphicsThread::GraphicsThread(std::atomic<std::shared_ptr<std::vector<float>>>& _shared)
-//	:shared(_shared)
-//{
-//
-//}
-
-GraphicsThread::GraphicsThread(std::shared_ptr<std::vector<float>>& shared,
-	std::atomic<bool>& dataReady, std::mutex& mtx)
-	:mailbox(shared),
-	dataReady(dataReady),
-	mtx(mtx)
-{
-	this->readBuffer = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
 }
 
 void VerifyIntegrity(const std::vector<float>& data)
@@ -58,7 +50,6 @@ void GraphicsThread::operator()()
 	const int screenHeight = 720;
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
 	SetTargetFPS(60);
-	std::cout << "Graphics Thread Initialized" << std::endl;
 
 	for (int i{}; i < screenWidth; i += 40)
 	{
@@ -70,22 +61,12 @@ void GraphicsThread::operator()()
 		DrawLine(0, i, screenWidth, i, GetColor(0x111111FF));
 	}
 
-
-
-
 	while (!WindowShouldClose())
 	{
-
-		std::unique_lock<std::mutex> lck(this->mtx);
-		if (lck && dataReady.load())
+		if (share_ag.swapConsumer(this->readBuffer))
 		{
-			std::swap(this->mailbox, this->readBuffer);
-			this->dataReady = false;
+
 		}
-		lck.unlock();
-
-
-		//VerifyIntegrity(*this->readBuffer);
 		BeginDrawing();
 		this->Draw(GetScreenWidth(), GetScreenHeight());
 		EndDrawing();

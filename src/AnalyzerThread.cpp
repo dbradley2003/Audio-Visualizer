@@ -4,6 +4,7 @@
 
 #include "AnalyzerThread.h"
 #include "RingBuffer.h"
+#include "AnalyzerGraphicsShare.h"
 
 #pragma warning(disable : 4267)
 #pragma warning(disable : 4244)
@@ -11,21 +12,13 @@
 
 #define PI 3.14159265358979323846f
 
-AnalyzerThread::AnalyzerThread(RingBuffer& _buffer,
-	std::shared_ptr<std::vector<float>>& mailbox,
-	std::atomic<bool>& dataReady,
-	std::mutex& mtx
-)
+AnalyzerThread::AnalyzerThread(RingBuffer& _buffer, AnalyzerGraphicsShare& share_ag)
 	:
 	buffer(_buffer),
-
-	mailbox(mailbox),
-	dataReady(dataReady),
-	mtx(mtx)
+	share_ag(share_ag)
 {
 	m_hannTable.reserve(SAMPLE_SIZE);
 	this->samples.reserve(SAMPLE_SIZE);
-	this->mailbox = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
 	this->current = std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2);
 	for (int i{}; i < SAMPLE_SIZE; ++i)
 	{
@@ -119,10 +112,5 @@ void AnalyzerThread::Update()
 	}
 
 	// Make fresh data available to visualizer
-	std::shared_ptr<std::vector<float>> tmp = this->current;
-	{ 
-		std::lock_guard<std::mutex> lck(this->mtx);
-		std::swap(this->mailbox, this->current);
-		this->dataReady = true;
-	}
+	this->share_ag.swapProducer(this->current);
 }

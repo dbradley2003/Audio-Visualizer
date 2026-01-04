@@ -10,6 +10,7 @@
 #include <mutex>
 
 class RingBuffer;
+struct AnalyzerGraphicsShare;
 
 typedef std::complex<double> ComplexValue;
 typedef std::valarray<ComplexValue> ComplexArray;
@@ -23,9 +24,7 @@ public:
 	//AnalyzerThread(RingBuffer& buffer, std::atomic<std::shared_ptr<std::vector<float>>>& _shared);
 	AnalyzerThread(
 		RingBuffer& buffer,
-		std::shared_ptr<std::vector<float>>& mailbox, 
-		std::atomic<bool>& dataReady,
-		std::mutex& mtx
+		AnalyzerGraphicsShare& share_ag
 	);
 
 	
@@ -47,12 +46,8 @@ private:
 
 	std::shared_ptr<std::vector<float>> current;
 	ComplexArray data;
-	
-	
-	std::atomic<bool>& dataReady;
-	std::shared_ptr<std::vector<float>>& mailbox;
-	std::mutex& mtx;
-	//std::atomic<std::shared_ptr<std::vector<float>>>& mailbox;
+
+	AnalyzerGraphicsShare& share_ag;
 };
 
 #endif
