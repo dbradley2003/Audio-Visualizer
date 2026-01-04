@@ -34,6 +34,7 @@ public:
 
 private:
 	RingBuffer& ringBuffer;
+	//std::vector<std::complex<double>> samples;
 	std::array<ComplexValue, SAMPLE_SIZE> samples;
 	std::array<float, SAMPLE_SIZE> m_hannTable;
 	std::shared_ptr<std::vector<float>> outputBuffer;

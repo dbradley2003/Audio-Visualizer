@@ -6,6 +6,8 @@
 #include "RingBuffer.h"
 #include "AnalyzerGraphicsShare.h"
 
+#include "dj_fft.h"
+
 #pragma warning(disable : 4267)
 #pragma warning(disable : 4244)
 #pragma warning(disable : 4305)
@@ -111,7 +113,7 @@ void AnalyzerThread::Update()
 
 	for (int i{}; i < SAMPLE_SIZE / 2; ++i)
 	{
-		float squaredMag = std::norm(this->samples[i]);
+		float squaredMag = std::norm(this->data[i]);
 		float db = 10.0f * log10f(squaredMag + 1e-12f);
 		float normalized = (db + 60.0f) * invSixety;
 		(*this->outputBuffer)[i] = std::clamp(normalized, 0.0f, 1.0f);

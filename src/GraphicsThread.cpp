@@ -81,7 +81,6 @@ void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
 	float glowAlpha = (0.1f + (bass * 0.4f)) * flicker;
 
 	DrawRectangle(x - 3, y, w + 6, h, ColorAlpha(col, glowAlpha));
-
 	DrawRectangle(x, y, w, h, col);
 
 	if (w > 2) {
@@ -92,11 +91,12 @@ void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
 void GraphicsThread::Draw(int screenWidth, int screenHeight)
 {
 
-	auto buff = this->readBuffer;//std::atomic_load(&shared);
+	auto buff = this->readBuffer;
 	if (!buff || buff->empty())
 	{
 		return;
 	}
+
 
 	size_t N = buff->size();
 	if (this->visualHeights.size() != N) this->visualHeights.resize(N, 0.0f);
