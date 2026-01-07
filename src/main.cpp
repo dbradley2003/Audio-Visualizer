@@ -20,7 +20,7 @@ int main()
 	std::string filePath = "demos/audio11.wav";
 
 	// triple-buffer pattern for safe-concurrent access between visualizer and analyzer
-	TripleBuffer share_ag{};
+	TripleBuffer<std::vector<float>> tripleBuffer{};
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
 	RingBuffer ringBuffer = RingBuffer();
@@ -28,7 +28,7 @@ int main()
 	AudioEngine audioObj = AudioEngine(ringBuffer, filePath);
 
 	// launched as a functor in its overloaded operator()
-	AnalyzerThread analyzerThread = AnalyzerThread(std::ref(ringBuffer), std::ref(share_ag));
+	AnalyzerThread analyzerThread = AnalyzerThread(std::ref(ringBuffer), std::ref(tripleBuffer));
 	analyzerThread.Launch(); 
 	
 	if (!audioObj.Init())
@@ -37,16 +37,14 @@ int main()
 	}
 	audioObj.Start();
 
-	GraphicsThread visualizer{ 1280,720, share_ag };
+	GraphicsThread visualizer{ 1280,720, tripleBuffer };
 	visualizer.Initialize(); // initialize window and constants
 
 	while (!WindowShouldClose())
 	{
-		visualizer.Swap();
 		BeginDrawing();
 		visualizer.Draw();
 		EndDrawing();
 	}
-
 	return EXIT_SUCCESS;
 }

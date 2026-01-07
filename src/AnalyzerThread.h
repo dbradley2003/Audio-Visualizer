@@ -12,7 +12,6 @@
 
 class RingBuffer;
 
-
 typedef std::complex<double> ComplexValue;
 typedef std::valarray<ComplexValue> ComplexArray;
 
@@ -22,9 +21,8 @@ public:
 
 	static constexpr int SAMPLE_SIZE = 1024;
 	static const int HOP_SIZE = 256;
-	static constexpr int WRITE_BUFFER_SIZE = SAMPLE_SIZE / 2;
 
-	AnalyzerThread(RingBuffer& buffer, TripleBuffer& share_ag);
+	AnalyzerThread(RingBuffer& buffer, TripleBuffer<std::vector<float>>& share_ag);
 	AnalyzerThread(const AnalyzerThread&) = delete;
 	AnalyzerThread(AnalyzerThread&&) = delete;
 	AnalyzerThread& operator=(const AnalyzerThread&) = delete;
@@ -39,6 +37,7 @@ private:
 	void fft(ComplexArray& data);
 	void GetSamples();
 	void InitHannTable();
+	void ApplyHanning();
 
 	RingBuffer& ringBuffer;
 
@@ -47,7 +46,7 @@ private:
 	std::shared_ptr<std::vector<float>> outputBuckets;
 	
 	ComplexArray fftData;
-	TripleBuffer& share_ag;
+	TripleBuffer<std::vector<float>>& share_ag;
 	std::thread mThread;
 };
 

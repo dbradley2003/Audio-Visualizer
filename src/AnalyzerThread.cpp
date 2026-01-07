@@ -15,13 +15,13 @@
 
 #define PI 3.14159265358979323846f
 
-AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, TripleBuffer& _share_ag)
+AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, TripleBuffer<std::vector<float>>& _share_ag)
 	:
 	ringBuffer(_ringBuffer),
 	share_ag(_share_ag),
-	outputBuckets(std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2)),
 	mThread()
 {
+	this->outputBuckets = this->share_ag.producerWriteBuffer();
 	std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
 	std::fill(samples.begin(), samples.end(), 0);
 	InitHannTable();
@@ -108,7 +108,6 @@ void AnalyzerThread::GetSamples()
 {
 	float val;
 	int available = ringBuffer.GetAvailable();
-
 	if (available > HOP_SIZE) {
 
 		// move window 128 items over
@@ -118,11 +117,21 @@ void AnalyzerThread::GetSamples()
 			this->samples.begin()
 		);
 
+		size_t writeIndex = SAMPLE_SIZE - HOP_SIZE;
+
 		for (int i = 0; i < HOP_SIZE; ++i)
 		{
 			ringBuffer.PopFront(val);
-			this->samples[i] = { val * this->m_hannTable[i], 0 };
+			this->samples[writeIndex + i] = { val, 0 };
 		}
+	}
+}
+
+void AnalyzerThread::ApplyHanning()
+{
+	for (int i{}; i < SAMPLE_SIZE; ++i)
+	{
+		this->fftData[i] *= this->m_hannTable[i];
 	}
 }
 
@@ -130,12 +139,14 @@ void AnalyzerThread::Update()
 {
 	this->GetSamples();
 	this->fftData = ComplexArray(this->samples.data(), SAMPLE_SIZE);
+	this->ApplyHanning();
 	this->fft(fftData);
 
 	const float invSixety = 1.0f / 60.0f;
-	const int WINDOW_SIZE = SAMPLE_SIZE / 2;
 
-	for (int i{}; i < WINDOW_SIZE; ++i)
+	const int numBins = SAMPLE_SIZE / 2;
+
+	for (int i{}; i < numBins; ++i)
 	{
 		float squaredMag = std::norm(this->fftData[i]);
 		float db = 10.0f * log10f(squaredMag + 1e-12f);

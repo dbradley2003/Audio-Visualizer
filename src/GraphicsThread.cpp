@@ -21,15 +21,15 @@
 
 using namespace std;
 
-GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer& share_ag)
+GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<std::vector<float>>& share_ag)
 	:
-	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE)),
 	screenWidth(screenWidth),
 	screenHeight(screenHeight),
 	share_ag(share_ag),
 	smoothState(BUCKET_COUNT),
 	smearedState(BUCKET_COUNT)
 {
+	this->readBuffer = share_ag.consumerReadBuffer();
 	halfWidth = static_cast<float>((screenWidth / 2.0f));
 }
 
@@ -103,6 +103,8 @@ GraphicsThread::~GraphicsThread()
 
 void GraphicsThread::Draw()
 {
+	this->Swap();
+
 	auto buff = this->readBuffer;
 	if (!buff || (*buff).empty())
 	{
@@ -119,7 +121,7 @@ void GraphicsThread::Draw()
 
 	BeginTextureMode(target);
 
-	BeginBlendMode(BLEND_MULTIPLIED);
+	BeginBlendMode(BLEND_ALPHA);
 	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
 	EndBlendMode();
 
