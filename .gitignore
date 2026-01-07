@@ -9,7 +9,7 @@ build/
 out/
 bin/
 
-
+project_outline.md
 
 # User-specific files
 AudioVisualizer.vcxproj.filters

@@ -39,15 +39,8 @@ void GraphicsThread::Initialize()
 	SetConfigFlags(FLAG_VSYNC_HINT);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
 
-	for (int i{}; i < screenWidth; i += 40)
-	{
-		DrawLine(i, 0, i, screenHeight, GetColor(0x111111FF));
-	}
-
-	for (int i{}; i < screenHeight; i += 40)
-	{
-		DrawLine(0, i, screenWidth, i, GetColor(0x111111FF));
-	}
+	target = LoadRenderTexture(screenWidth, screenHeight);
+	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
@@ -103,6 +96,10 @@ void GraphicsThread::fftProcess(std::shared_ptr<std::vector<float>>& buff)
 	}
 }
 
+GraphicsThread::~GraphicsThread()
+{
+	UnloadRenderTexture(target);
+}
 
 void GraphicsThread::Draw()
 {
@@ -118,24 +115,28 @@ void GraphicsThread::Draw()
 	float barWidth = (halfWidth / (float)64) - BAR_SPACING;
 	barWidth = ceilf(barWidth);
 	barWidth = std::max(barWidth, 1.0f);
-
 	int centerY = screenHeight / 2;
 
+	BeginTextureMode(target);
+
+	BeginBlendMode(BLEND_MULTIPLIED);
+	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
+	EndBlendMode();
+
+	BeginBlendMode(BLEND_ADDITIVE);
 	for (int i{}; i < (int)n; ++i)
 	{
 		int mainH = (int)(smoothState[i] * screenHeight);
 		int ghostH = (int)(smearedState[i] * screenHeight);
-
 		int yMain = centerY - (mainH / 2);
 		int yGhost = centerY - (ghostH / 2);
-
 		float xOffset = i * (barWidth + BAR_SPACING);
 		int xRight = static_cast<int>(halfWidth + xOffset);
 		int xLeft = static_cast<int>(halfWidth - xOffset - barWidth);
 
 		if (ghostH > 0)
 		{
-			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.6f); // Transparent
+			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.6f);
 			DrawRectangle(xRight, yGhost, (int)barWidth, ghostH, ghostColor);
 			DrawRectangle(xLeft, yGhost, (int)barWidth, ghostH, ghostColor);
 		}
@@ -148,9 +149,34 @@ void GraphicsThread::Draw()
 			DrawRectangle(xLeft + (int)barWidth / 2, yMain, 2, mainH, WHITE);
 		}
 	}
+	EndBlendMode();
 
 	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-		screenWidth / 1.2f, BLANK, VIS_PURPLE);
+		screenWidth * 0.8f, BLANK, BLACK);
 	EndBlendMode();
+
+	EndTextureMode();
+
+	BeginDrawing();
+	ClearBackground(BLACK);
+
+	float shake = smoothState[0] * 15.0f;
+	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
+	Rectangle destRec = { 0, 0, (float)screenWidth, (float)screenHeight };
+	Vector2 origin = { 0, 0 };
+
+	BeginBlendMode(BLEND_ADDITIVE);
+	DrawTexturePro(target.texture, srcRec, 
+		{ -shake,0,(float)screenWidth, (float)screenHeight },
+		origin, 0.0f, RED);
+	DrawTexturePro(target.texture, srcRec,
+		{ shake,0,(float)screenWidth, (float)screenHeight }, 
+		origin, 0.0f, BLUE);
+
+	DrawTexturePro(target.texture, srcRec, destRec, origin, 0.0f, GREEN);
+	EndBlendMode();
+	
+	DrawFPS(10, 10);
+	EndDrawing();
 }

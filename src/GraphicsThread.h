@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <memory>
+#include "raylib.h"
 
 struct AnalyzerGraphicsShare;
 
@@ -17,7 +18,7 @@ public:
 	GraphicsThread(GraphicsThread&&) = delete;
 	GraphicsThread& operator=(const GraphicsThread&) = delete;
 	GraphicsThread& operator=(GraphicsThread&&) = delete;
-	~GraphicsThread() = default;
+	~GraphicsThread();
 
 	void Initialize();
 	void Draw();
@@ -35,6 +36,7 @@ private:
 	int screenWidth;
 	int screenHeight;
 	float halfWidth;
+	RenderTexture2D target;
 	const float SMOOTHNESS{ 30.0f };
 	const float SMEAREDNESS{ 10.0f };
 };

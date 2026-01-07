@@ -18,7 +18,7 @@
 
 int main()
 {
-	std::string filePath = "demos/audio8.wav";
+	std::string filePath = "demos/audio5.wav";
 
 	// triple-buffer pattern for safe-concurrent access between visualizer and analyzer
 	AnalyzerGraphicsShare share_ag;
@@ -44,8 +44,6 @@ int main()
 	{
 		visualizer.Swap();
 		BeginDrawing();
-		BeginBlendMode(BLEND_ADDITIVE);
-		//DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color({ 10, 0, 20, 20 }));
 		visualizer.Draw();
 		EndBlendMode();
 		EndDrawing();
