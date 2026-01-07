@@ -203,7 +203,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\AnalyzerGraphicsShare.h" />
+    <ClInclude Include="src\TripleBuffer.h" />
     <ClInclude Include="include\dj_fft.h" />
     <ClInclude Include="include\miniaudio.h" />
     <ClInclude Include="src\AnalyzerThread.h" />

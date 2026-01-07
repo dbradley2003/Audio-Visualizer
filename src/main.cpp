@@ -1,11 +1,10 @@
 #include <iostream>
-#include <thread>
 
 #include "RingBuffer.h"
 #include "AudioEngine.h"
 #include "AnalyzerThread.h"
 #include "GraphicsThread.h"
-#include "AnalyzerGraphicsShare.h"
+#include "TripleBuffer.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -18,18 +17,19 @@
 
 int main()
 {
-	std::string filePath = "demos/audio5.wav";
+	std::string filePath = "demos/audio11.wav";
 
 	// triple-buffer pattern for safe-concurrent access between visualizer and analyzer
-	AnalyzerGraphicsShare share_ag;
+	TripleBuffer share_ag{};
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
 	RingBuffer ringBuffer = RingBuffer();
-	
+
 	AudioEngine audioObj = AudioEngine(ringBuffer, filePath);
+
+	// launched as a functor in its overloaded operator()
 	AnalyzerThread analyzerThread = AnalyzerThread(std::ref(ringBuffer), std::ref(share_ag));
-	
-	analyzerThread.Launch(); // launched as a functor in its overloaded operator()
+	analyzerThread.Launch(); 
 	
 	if (!audioObj.Init())
 	{
@@ -45,7 +45,6 @@ int main()
 		visualizer.Swap();
 		BeginDrawing();
 		visualizer.Draw();
-		EndBlendMode();
 		EndDrawing();
 	}
 

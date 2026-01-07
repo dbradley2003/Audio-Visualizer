@@ -8,8 +8,10 @@
 #include <array>
 #include <thread>
 
+#include "TripleBuffer.h"
+
 class RingBuffer;
-struct AnalyzerGraphicsShare;
+
 
 typedef std::complex<double> ComplexValue;
 typedef std::valarray<ComplexValue> ComplexArray;
@@ -22,7 +24,7 @@ public:
 	static const int HOP_SIZE = 256;
 	static constexpr int WRITE_BUFFER_SIZE = SAMPLE_SIZE / 2;
 
-	AnalyzerThread(RingBuffer& buffer, AnalyzerGraphicsShare& share_ag);
+	AnalyzerThread(RingBuffer& buffer, TripleBuffer& share_ag);
 	AnalyzerThread(const AnalyzerThread&) = delete;
 	AnalyzerThread(AnalyzerThread&&) = delete;
 	AnalyzerThread& operator=(const AnalyzerThread&) = delete;
@@ -45,7 +47,7 @@ private:
 	std::shared_ptr<std::vector<float>> outputBuckets;
 	
 	ComplexArray fftData;
-	AnalyzerGraphicsShare& share_ag;
+	TripleBuffer& share_ag;
 	std::thread mThread;
 };
 

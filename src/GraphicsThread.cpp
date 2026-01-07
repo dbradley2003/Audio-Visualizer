@@ -3,7 +3,6 @@
 #include "raylib.h"
 #include <iostream>
 #include <cmath>
-#include "AnalyzerGraphicsShare.h"
 #include "rlgl.h"
 
 #pragma warning(disable: 4244)
@@ -22,12 +21,12 @@
 
 using namespace std;
 
-GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, AnalyzerGraphicsShare& share_ag)
+GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer& share_ag)
 	:
+	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE)),
 	screenWidth(screenWidth),
 	screenHeight(screenHeight),
 	share_ag(share_ag),
-	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE)),
 	smoothState(BUCKET_COUNT),
 	smearedState(BUCKET_COUNT)
 {
@@ -59,7 +58,8 @@ void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
 
 void DrawCoolRectangle(float x, float y, float width, float height, Color color)
 {
-	DrawRectangle(x, y, width, height, color);                        // Use passed color
+	DrawRectangle(x, y, width, height, color);     //Use passed color
+	 
 	DrawRectangleLines(x, y, width, height, ColorAlpha(color, 0.3f)); // Gruvbox foreground
 	DrawCircle(x + width / 2, y, width / 4, ColorAlpha(color, 0.2f)); // Aqua as an accent
 }
@@ -136,7 +136,7 @@ void GraphicsThread::Draw()
 
 		if (ghostH > 0)
 		{
-			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.6f);
+			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.4f);
 			DrawRectangle(xRight, yGhost, (int)barWidth, ghostH, ghostColor);
 			DrawRectangle(xLeft, yGhost, (int)barWidth, ghostH, ghostColor);
 		}
@@ -153,7 +153,7 @@ void GraphicsThread::Draw()
 
 	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-		screenWidth * 0.8f, BLANK, BLACK);
+		screenWidth * 0.8f, BLANK, VIS_PURPLE);
 	EndBlendMode();
 
 	EndTextureMode();
@@ -167,16 +167,16 @@ void GraphicsThread::Draw()
 	Vector2 origin = { 0, 0 };
 
 	BeginBlendMode(BLEND_ADDITIVE);
-	DrawTexturePro(target.texture, srcRec, 
+	DrawTexturePro(target.texture, srcRec,
 		{ -shake,0,(float)screenWidth, (float)screenHeight },
 		origin, 0.0f, RED);
 	DrawTexturePro(target.texture, srcRec,
-		{ shake,0,(float)screenWidth, (float)screenHeight }, 
+		{ shake,0,(float)screenWidth, (float)screenHeight },
 		origin, 0.0f, BLUE);
 
 	DrawTexturePro(target.texture, srcRec, destRec, origin, 0.0f, GREEN);
 	EndBlendMode();
-	
+
 	DrawFPS(10, 10);
 	EndDrawing();
 }

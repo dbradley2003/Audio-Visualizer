@@ -4,8 +4,10 @@
 
 #include "AnalyzerThread.h"
 #include "RingBuffer.h"
-#include "AnalyzerGraphicsShare.h"
 
+#include "TripleBuffer.h"
+
+#include <vector>
 
 #pragma warning(disable : 4267)
 #pragma warning(disable : 4244)
@@ -13,7 +15,7 @@
 
 #define PI 3.14159265358979323846f
 
-AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, AnalyzerGraphicsShare& _share_ag)
+AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, TripleBuffer& _share_ag)
 	:
 	ringBuffer(_ringBuffer),
 	share_ag(_share_ag),
@@ -22,7 +24,7 @@ AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, AnalyzerGraphicsShare& _
 {
 	std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
 	std::fill(samples.begin(), samples.end(), 0);
-	this->InitHannTable();
+	InitHannTable();
 }
 
 void AnalyzerThread::InitHannTable()
