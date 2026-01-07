@@ -46,13 +46,13 @@ void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
 	if (h <= 0 || w <= 0) return;
 
 	float flicker = (float)GetRandomValue(90, 100) / 100.0f;
-	float glowAlpha = (0.1f + (bass * 0.4f)) * flicker;
+	float glowAlpha = (0.1f + (bass * 0.8f)) * flicker;
 
 	DrawRectangle(x - 3, y, w + 6, h, ColorAlpha(col, glowAlpha));
 	DrawRectangle(x, y, w, h, col);
 
 	if (w > 2) {
-		DrawRectangle(x + (w / 2), y, 1, h, Color{ 255, 255, 255, 220 });
+		DrawRectangle(x + (w / 2), y, 1, h, VIS_RED);
 	}
 }
 
@@ -144,6 +144,7 @@ void GraphicsThread::Draw()
 		}
 		if (mainH > 0) {
 			// Draw the Solid Bar
+			
 			DrawCoolRectangle(xRight, yMain, (int)barWidth, mainH, VIS_PURPLE);
 			DrawCoolRectangle(xLeft, yMain, (int)barWidth, mainH, VIS_PURPLE);
 

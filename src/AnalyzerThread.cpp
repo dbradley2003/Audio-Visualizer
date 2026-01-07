@@ -35,6 +35,10 @@ void AnalyzerThread::InitHannTable()
 	}
 }
 
+// Cooley-Turkey FFT 
+// (in-place, breadth-first, decimation-in-frequency)
+// Taken from rosettacode.org
+// https://rosettacode.org/wiki/Fast_Fourier_transform#C.2B.2B
 void AnalyzerThread::fft(ComplexArray& d)
 {
 	// DFT

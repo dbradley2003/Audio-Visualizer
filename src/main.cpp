@@ -5,21 +5,16 @@
 #include "AnalyzerThread.h"
 #include "GraphicsThread.h"
 #include "TripleBuffer.h"
+#include "raylib.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "winmm.lib")
 
-#define GRUVBOX_BG \
-  Color{ 40, 40, 40, 255 } // #282828
-
-#include "raylib.h"
-
 int main()
 {
-	std::string filePath = "demos/audio4.wav";
+	std::string filePath = "demos/audio10.wav";
 
-	// triple-buffer pattern for safe-concurrent access between visualizer and analyzer
 	TripleBuffer<std::vector<float>> tripleBuffer{};
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
