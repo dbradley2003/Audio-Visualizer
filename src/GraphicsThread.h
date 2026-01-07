@@ -11,7 +11,7 @@ struct AnalyzerGraphicsShare;
 class GraphicsThread {
 public:
 	static constexpr int BUCKET_COUNT = 64;
-	static constexpr int BAR_SPACING = 1;
+	static constexpr int BAR_SPACING = 5;
 	
 	GraphicsThread(int screenHeight, int screenWidth, TripleBuffer<std::vector<float>>& share_ag);
 	GraphicsThread(const GraphicsThread&) = delete;
