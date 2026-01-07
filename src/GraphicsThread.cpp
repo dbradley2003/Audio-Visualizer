@@ -1,56 +1,43 @@
 #include "GraphicsThread.h"
 
 #include "raylib.h"
-#include <atomic>
 #include <iostream>
-#include <algorithm>
+#include <cmath>
 #include "AnalyzerGraphicsShare.h"
+#include "rlgl.h"
 
-GraphicsThread::GraphicsThread(AnalyzerGraphicsShare& share_ag)
+#pragma warning(disable: 4244)
+
+#define VIS_RED \
+  Color{ 251, 73, 52, 255 } // #fb4934
+
+#define VIS_BLUE \
+  Color{ 131, 165, 152, 255 } // #83a598
+
+#define VIS_YELLOW \
+  Color{ 250, 189, 47, 255 } // #fabd2f
+
+#define VIS_PURPLE \
+  Color{ 211, 134, 155, 255 } // #d3869b
+
+using namespace std;
+
+GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, AnalyzerGraphicsShare& share_ag)
 	:
+	screenWidth(screenWidth),
+	screenHeight(screenHeight),
 	share_ag(share_ag),
-	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE))
+	readBuffer(std::make_shared<std::vector<float>>(READ_BUFFER_SIZE)),
+	smoothState(BUCKET_COUNT),
+	smearedState(BUCKET_COUNT)
 {
+	halfWidth = static_cast<float>((screenWidth / 2.0f));
 }
 
-void DrawNeonBar(int x, int y, int width, int height, Color color)
+void GraphicsThread::Initialize()
 {
-	Color glowColor = color;
-	glowColor.a = 25;
-	DrawRectangle(x - 4, y, width + 8, height, glowColor);
-
-	glowColor.a = 10;
-	DrawRectangle(x - 2, y, width + 4, height, glowColor);
-
-	Color coreColor = ColorBrightness(color, 0.1f);
-	DrawRectangle(x, y, width, height, coreColor);
-}
-
-void VerifyIntegrity(const std::vector<float>& data)
-{
-	if (data.empty())
-	{
-		return;
-	}
-
-	float first = data[0];
-	for (size_t i = 1; i < data.size(); ++i)
-	{
-		if (data[i] != first)
-		{
-			std::cerr << "CRITICAL FAILURE: Tearing detected at index " << i
-				<< ". Expected " << first << " got " << data[i] << std::endl;
-			std::cin.get();
-		}
-	}
-}
-
-void GraphicsThread::operator()()
-{
-	const int screenWidth = 1280;
-	const int screenHeight = 720;
+	SetConfigFlags(FLAG_VSYNC_HINT);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
-	SetTargetFPS(60);
 
 	for (int i{}; i < screenWidth; i += 40)
 	{
@@ -60,17 +47,6 @@ void GraphicsThread::operator()()
 	for (int i{}; i < screenHeight; i += 40)
 	{
 		DrawLine(0, i, screenWidth, i, GetColor(0x111111FF));
-	}
-
-	while (!WindowShouldClose())
-	{
-		if (share_ag.swapConsumer(this->readBuffer))
-		{
-
-		}
-		BeginDrawing();
-		this->Draw(GetScreenWidth(), GetScreenHeight());
-		EndDrawing();
 	}
 }
 
@@ -88,99 +64,93 @@ void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
 	}
 }
 
-void GraphicsThread::Draw(int screenWidth, int screenHeight)
+void DrawCoolRectangle(float x, float y, float width, float height, Color color)
 {
+	DrawRectangle(x, y, width, height, color);                        // Use passed color
+	DrawRectangleLines(x, y, width, height, ColorAlpha(color, 0.3f)); // Gruvbox foreground
+	DrawCircle(x + width / 2, y, width / 4, ColorAlpha(color, 0.2f)); // Aqua as an accent
+}
 
+bool GraphicsThread::Swap()
+{
+	return share_ag.swapConsumer(this->readBuffer);
+}
+
+void GraphicsThread::fftProcess(std::shared_ptr<std::vector<float>>& buff)
+{
+	int numBuckets = BUCKET_COUNT;
+	for (int bar{ 0 }; bar < numBuckets; ++bar)
+	{
+		float tStart = (float)bar / (float)numBuckets;
+		float tEnd = (float)(bar + 1) / (float)numBuckets;
+
+		int fStart = (int)(powf(tStart, 2.0f) * 512.0f);
+		int fEnd = (int)(powf(tEnd, 2.0f) * 512.0f);
+
+		if (fStart < 2) fStart = 2;
+		if (fEnd <= fStart) fEnd = fStart + 1;
+		if (fEnd > 512) fEnd = 512;
+
+		float maxInGroup = 0.0f;
+		for (int q = fStart; q < fEnd; ++q)
+		{
+			if ((*buff)[q] > maxInGroup) maxInGroup = (*buff)[q];
+		}
+
+		float dt = GetFrameTime();
+		smoothState[bar] += (maxInGroup - smoothState[bar]) * SMOOTHNESS * dt;
+		smearedState[bar] += (smoothState[bar] - smearedState[bar]) * SMEAREDNESS * dt;
+	}
+}
+
+
+void GraphicsThread::Draw()
+{
 	auto buff = this->readBuffer;
-	if (!buff || buff->empty())
+	if (!buff || (*buff).empty())
 	{
 		return;
 	}
 
+	fftProcess(buff);
+	size_t n = smoothState.size();
 
-	size_t N = buff->size();
-	if (this->visualHeights.size() != N) this->visualHeights.resize(N, 0.0f);
+	float barWidth = (halfWidth / (float)64) - BAR_SPACING;
+	barWidth = ceilf(barWidth);
+	barWidth = std::max(barWidth, 1.0f);
 
-	float halfWidth = (float)screenWidth / 2.0f;
-	int barSpacing = 1;
-	int activeBins = (int)(N - 2);
-	float barWidth = (halfWidth / (float)activeBins) - barSpacing;
-	if (barWidth < 1.0f) barWidth = 1.0f;
+	int centerY = screenHeight / 2;
 
-	float rawBass = (*buff)[2];
-	BeginBlendMode(BLEND_ADDITIVE);
-	DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color({ 10, 0, 20, 20 }));
-
-	if (rawBass > 0.6f)
+	for (int i{}; i < (int)n; ++i)
 	{
-		Color pulseColor = ColorFromHSV(190.0f, 1.0f, 1.0f);
-		DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-			rawBass * 400.0f,
-			ColorAlpha(pulseColor, 0.15f * rawBass),
-			BLANK);
+		int mainH = (int)(smoothState[i] * screenHeight);
+		int ghostH = (int)(smearedState[i] * screenHeight);
+
+		int yMain = centerY - (mainH / 2);
+		int yGhost = centerY - (ghostH / 2);
+
+		float xOffset = i * (barWidth + BAR_SPACING);
+		int xRight = static_cast<int>(halfWidth + xOffset);
+		int xLeft = static_cast<int>(halfWidth - xOffset - barWidth);
+
+		if (ghostH > 0)
+		{
+			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.6f); // Transparent
+			DrawRectangle(xRight, yGhost, (int)barWidth, ghostH, ghostColor);
+			DrawRectangle(xLeft, yGhost, (int)barWidth, ghostH, ghostColor);
+		}
+		if (mainH > 0) {
+			// Draw the Solid Bar
+			DrawCoolRectangle(xRight, yMain, (int)barWidth, mainH, VIS_PURPLE);
+			DrawCoolRectangle(xLeft, yMain, (int)barWidth, mainH, VIS_PURPLE);
+
+			DrawRectangle(xRight + (int)barWidth / 2, yMain, 2, mainH, WHITE);
+			DrawRectangle(xLeft + (int)barWidth / 2, yMain, 2, mainH, WHITE);
+		}
 	}
 
-	for (int i = 2; i < N; ++i)
-	{
-		float magnitude = (*buff)[i];
-
-		if (i < 15)
-		{
-			float taper = (float)i / 15.0f;
-			magnitude *= (taper * taper);
-		}
-
-		float t = (float)(i - 2) / (float)(N - 2);
-
-		float xOffset = (float)(i - 2) * (barWidth + barSpacing);
-
-		int xRight = (int)(halfWidth + xOffset);
-		int xLeft = (int)(halfWidth - xOffset - barWidth);
-
-		float logMag = log10f(1.0f + magnitude * 9.0f);
-		float targetHeight = logMag * screenHeight;
-
-		if (targetHeight > visualHeights[i])
-		{
-			visualHeights[i] = targetHeight;
-		}
-		else
-		{
-			visualHeights[i] -= (screenHeight * 1.5f) * GetFrameTime();
-			if (visualHeights[i] < 0) visualHeights[i] = 0;
-		}
-
-		int centerY = screenHeight / 2;
-		int h = (int)visualHeights[i];
-		int y = centerY - (h / 2);
-
-		float curve = powf(t, 2.0f);
-		float baseHue = 190.0f + (curve * 130.0f);
-		float finalHue = fmodf(baseHue + (float)GetTime() * 15.0f, 360.0f);
-		float saturation = 0.8f + (rawBass * 0.2f);
-		Color neonColor = ColorFromHSV(finalHue, saturation, 1.0f);
-
-		if (h > 0) {
-			if (i == 2)
-			{
-				DrawNeonBar(xRight, y, (int)barWidth + 1, h, neonColor, rawBass);
-				DrawNeonBar(xLeft, y, (int)barWidth + 1, h, neonColor, rawBass);
-			}
-			else
-			{
-				DrawNeonBar(xRight, y, (int)barWidth, h, neonColor, rawBass);
-				DrawNeonBar(xLeft, y, (int)barWidth, h, neonColor, rawBass);
-			}
-		}
-	}
-	EndBlendMode();
 	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-		screenWidth / 1.2f, BLANK, Color{ 0,0,0,200 });
+		screenWidth / 1.2f, BLANK, VIS_PURPLE);
 	EndBlendMode();
-}
-
-GraphicsThread::~GraphicsThread()
-{
-
 }

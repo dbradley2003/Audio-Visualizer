@@ -6,7 +6,6 @@
 #include "RingBuffer.h"
 #include "AnalyzerGraphicsShare.h"
 
-#include "dj_fft.h"
 
 #pragma warning(disable : 4267)
 #pragma warning(disable : 4244)
@@ -18,11 +17,11 @@ AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, AnalyzerGraphicsShare& _
 	:
 	ringBuffer(_ringBuffer),
 	share_ag(_share_ag),
-	outputBuffer(std::make_shared<std::vector<float>>(WRITE_BUFFER_SIZE))
+	outputBuckets(std::make_shared<std::vector<float>>(SAMPLE_SIZE / 2)),
+	mThread()
 {
 	std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
 	std::fill(samples.begin(), samples.end(), 0);
-
 	this->InitHannTable();
 }
 
@@ -90,12 +89,34 @@ void AnalyzerThread::operator()()
 	}
 }
 
+void AnalyzerThread::Launch()
+{
+	this->mThread = std::thread(std::ref(*this));
+}
+
+AnalyzerThread::~AnalyzerThread()
+{
+	if (mThread.joinable())
+	{
+		mThread.join();
+	}
+}
+
 void AnalyzerThread::GetSamples()
 {
 	float val;
 	int available = ringBuffer.GetAvailable();
-	if (available > SAMPLE_SIZE) {
-		for (int i = 0; i < SAMPLE_SIZE; ++i)
+
+	if (available > HOP_SIZE) {
+
+		// move window 128 items over
+		std::copy(
+			this->samples.begin() + HOP_SIZE,
+			this->samples.end(),
+			this->samples.begin()
+		);
+
+		for (int i = 0; i < HOP_SIZE; ++i)
 		{
 			ringBuffer.PopFront(val);
 			this->samples[i] = { val * this->m_hannTable[i], 0 };
@@ -106,19 +127,20 @@ void AnalyzerThread::GetSamples()
 void AnalyzerThread::Update()
 {
 	this->GetSamples();
-	this->data = ComplexArray(this->samples.data(), SAMPLE_SIZE);
-	this->fft(data);
+	this->fftData = ComplexArray(this->samples.data(), SAMPLE_SIZE);
+	this->fft(fftData);
 
 	const float invSixety = 1.0f / 60.0f;
+	const int WINDOW_SIZE = SAMPLE_SIZE / 2;
 
-	for (int i{}; i < SAMPLE_SIZE / 2; ++i)
+	for (int i{}; i < WINDOW_SIZE; ++i)
 	{
-		float squaredMag = std::norm(this->data[i]);
+		float squaredMag = std::norm(this->fftData[i]);
 		float db = 10.0f * log10f(squaredMag + 1e-12f);
 		float normalized = (db + 60.0f) * invSixety;
-		(*this->outputBuffer)[i] = std::clamp(normalized, 0.0f, 1.0f);
+		(*this->outputBuckets)[i] = std::clamp(normalized, 0.0f, 1.0f);
 	}
 
 	// Make fresh data available to visualizer
-	this->share_ag.swapProducer(this->outputBuffer);
+	this->share_ag.swapProducer(this->outputBuckets);
 }

@@ -211,6 +211,9 @@
     <ClInclude Include="src\GraphicsThread.h" />
     <ClInclude Include="src\RingBuffer.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="project_outline.md" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\raylib.5.5.0\build\native\raylib.targets" Condition="Exists('..\packages\raylib.5.5.0\build\native\raylib.targets')" />

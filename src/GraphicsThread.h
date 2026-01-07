@@ -8,21 +8,35 @@ struct AnalyzerGraphicsShare;
 
 class GraphicsThread {
 public:
-	static constexpr int READ_BUFFER_SIZE = 1024 / 2;
+	static constexpr int READ_BUFFER_SIZE = 512;
+	static constexpr int BUCKET_COUNT = 64;
+	static constexpr int BAR_SPACING = 5;
 
-	GraphicsThread(AnalyzerGraphicsShare& share_ag);
+	GraphicsThread(int screenHeight, int screenWidth, AnalyzerGraphicsShare& share_ag);
 	GraphicsThread(const GraphicsThread&) = delete;
 	GraphicsThread(GraphicsThread&&) = delete;
 	GraphicsThread& operator=(const GraphicsThread&) = delete;
 	GraphicsThread& operator=(GraphicsThread&&) = delete;
-	~GraphicsThread();
+	~GraphicsThread() = default;
 
-	void Draw(int screenWidth, int screenHeight);
-	void operator()();
+	void Initialize();
+	void Draw();
+	bool Swap();
+	void fftProcess(std::shared_ptr<std::vector<float>>&);
 private:
 	std::shared_ptr<std::vector<float>> readBuffer;
 	std::vector<float> visualHeights;
+	std::vector<float> smoothState;
+	std::vector<float> smearedState;
+
 	AnalyzerGraphicsShare& share_ag;
+
+	//constants
+	int screenWidth;
+	int screenHeight;
+	float halfWidth;
+	const float SMOOTHNESS{ 30.0f };
+	const float SMEAREDNESS{ 10.0f };
 };
 
 #endif

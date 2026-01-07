@@ -1,13 +1,15 @@
 #include <iostream>
+#include <string>
 
 #include "AudioEngine.h"
 #include "RingBuffer.h"
+
 
 #pragma warning(disable : 4100)
 
 void AudioEngine::ma_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
 	AudioEngine* pEngine = (AudioEngine*)pDevice->pUserData;
-	
+
 	float* pOutputF32 = (float*)pOutput;
 
 	if (pEngine->decoder.pBackendVTable == NULL)
@@ -18,7 +20,7 @@ void AudioEngine::ma_data_callback(ma_device* pDevice, void* pOutput, const void
 
 	ma_uint64 framesRead;
 	ma_decoder_read_pcm_frames(&pEngine->decoder, pOutput, frameCount, &framesRead);
-	
+
 	if (framesRead < frameCount)
 	{
 		ma_decoder_seek_to_pcm_frame(&pEngine->decoder, 0);
@@ -38,11 +40,12 @@ void AudioEngine::ma_data_callback(ma_device* pDevice, void* pOutput, const void
 	}
 }
 
-AudioEngine::AudioEngine(RingBuffer& queue)
+AudioEngine::AudioEngine(RingBuffer& queue, std::string& filePath)
 	:
 	device(),
 	decoder(),
-	circularQueue(queue)
+	circularQueue(queue),
+	filePath(std::move(filePath))
 {
 }
 
@@ -62,26 +65,27 @@ bool AudioEngine::Start()
 	return ma_device_start(&device) == MA_SUCCESS;
 }
 
-bool AudioEngine::LoadFile(const std::string& filePath)
+bool AudioEngine::Init()
 {
-	std::cout << "Loading " << filePath << std::endl;
 	ma_decoder_config decoderConfig;
-
 	decoderConfig = ma_decoder_config_init(ma_format_f32, 2, 44100);
-	ma_result result = ma_decoder_init_file(filePath.c_str(), &decoderConfig, &decoder);
-	
-	if (result != MA_SUCCESS) { return false; }
 
-	ma_device_config config = ma_device_config_init(ma_device_type_playback);
-	config.playback.format = decoder.outputFormat;
-	config.playback.channels = decoder.outputChannels;
-	config.sampleRate = decoder.outputSampleRate;
-	config.dataCallback = AudioEngine::ma_data_callback;
-	config.pUserData = this;
-
-	if (ma_device_init(NULL, &config, &device) != MA_SUCCESS)
+	if (ma_decoder_init_file(filePath.c_str(), &decoderConfig, &decoder) != MA_SUCCESS)
 	{
-		std::cout << "error ocurred initializing device" << std::endl;
+		std::cerr << "Error ocurred initializing decoder" << std::endl;
+		return false;
+	}
+
+	ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
+	deviceConfig.playback.format = decoder.outputFormat;
+	deviceConfig.playback.channels = decoder.outputChannels;
+	deviceConfig.sampleRate = decoder.outputSampleRate;
+	deviceConfig.dataCallback = AudioEngine::ma_data_callback;
+	deviceConfig.pUserData = this;
+
+	if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)
+	{
+		std::cerr << "ERROR: Could not initialize miniaudio device" << std::endl;
 		ma_decoder_uninit(&decoder);
 		return false;
 	}

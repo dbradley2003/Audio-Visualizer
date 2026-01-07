@@ -8,7 +8,7 @@
 
 struct AnalyzerGraphicsShare
 {
-	static constexpr int BUFFER_SIZE = 1024 / 2;
+	static constexpr int BUFFER_SIZE = 512;
 	
 	AnalyzerGraphicsShare()
 		:
