@@ -38,7 +38,7 @@ int main()
 	while (!WindowShouldClose())
 	{
 		BeginDrawing();
-		visualizer.Draw();
+		visualizer.Update();
 		EndDrawing();
 	}
 	return EXIT_SUCCESS;

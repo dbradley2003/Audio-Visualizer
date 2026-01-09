@@ -5,10 +5,6 @@
 #include "AnalyzerThread.h"
 #include "RingBuffer.h"
 
-#include "TripleBuffer.h"
-
-#include <vector>
-
 #pragma warning(disable : 4267)
 #pragma warning(disable : 4244)
 #pragma warning(disable : 4305)
@@ -122,7 +118,7 @@ void AnalyzerThread::GetSamples()
 		);
 
 		size_t writeIndex = SAMPLE_SIZE - HOP_SIZE;
-
+		
 		for (int i = 0; i < HOP_SIZE; ++i)
 		{
 			ringBuffer.PopFront(val);
@@ -141,13 +137,13 @@ void AnalyzerThread::ApplyHanning()
 
 void AnalyzerThread::Update()
 {
-	this->GetSamples();
+	GetSamples();
+	
 	this->fftData = ComplexArray(this->samples.data(), SAMPLE_SIZE);
-	this->ApplyHanning();
-	this->fft(fftData);
+	ApplyHanning();
+	fft(this->fftData);
 
 	const float invSixety = 1.0f / 60.0f;
-
 	const int numBins = SAMPLE_SIZE / 2;
 
 	for (int i{}; i < numBins; ++i)
@@ -158,6 +154,6 @@ void AnalyzerThread::Update()
 		(*this->outputBuckets)[i] = std::clamp(normalized, 0.0f, 1.0f);
 	}
 
-	// Make fresh data available to visualizer
+	// Make new data available to Visualizer
 	this->share_ag.swapProducer(this->outputBuckets);
 }

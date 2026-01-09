@@ -7,7 +7,6 @@
 #include <memory>
 #include <array>
 #include <thread>
-
 #include "TripleBuffer.h"
 
 class RingBuffer;

@@ -1,9 +1,9 @@
 #include "GraphicsThread.h"
 
 #include "raylib.h"
-#include <iostream>
 #include <cmath>
-#include "rlgl.h"
+#include "Bar.h"
+#include "Drawable.h"
 
 #pragma warning(disable: 4244)
 
@@ -21,52 +21,71 @@
 
 using namespace std;
 
+void DrawCoolRectangle(float x, float y, float width, float height, Color color);
+
+namespace DrawingDetails
+{
+	void drawGhostBar(const Bar& bar)
+	{
+		if (bar.height() > 0) {
+			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.4f);
+			DrawRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), ghostColor);
+			DrawRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), ghostColor);
+		}
+	}
+	void drawMainBar(const Bar& bar) {
+		if (bar.height() > 0) {
+			DrawCoolRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
+			DrawCoolRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
+			DrawRectangle(bar.xRight() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+			DrawRectangle(bar.xLeft() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+		}
+	};
+}
+
 GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<std::vector<float>>& share_ag)
 	:
 	screenWidth(screenWidth),
 	screenHeight(screenHeight),
 	share_ag(share_ag),
 	smoothState(BUCKET_COUNT),
-	smearedState(BUCKET_COUNT)
-{
-	this->readBuffer = share_ag.consumerReadBuffer();
-	halfWidth = static_cast<float>((screenWidth / 2.0f));
-}
+	smearedState(BUCKET_COUNT),
+	visBars(BUCKET_COUNT * 2)
+{}
 
 void GraphicsThread::Initialize()
 {
 	SetConfigFlags(FLAG_VSYNC_HINT);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
 
-	target = LoadRenderTexture(screenWidth, screenHeight);
+	this->target = LoadRenderTexture(screenWidth, screenHeight);
 	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
-}
 
-void DrawNeonBar(int x, int y, int w, int h, Color col, float bass) {
-	if (h <= 0 || w <= 0) return;
+	this->readBuffer = share_ag.consumerReadBuffer();
+	this->halfWidth = static_cast<float>((screenWidth / 2.0f));
 
-	float flicker = (float)GetRandomValue(90, 100) / 100.0f;
-	float glowAlpha = (0.1f + (bass * 0.8f)) * flicker;
-
-	DrawRectangle(x - 3, y, w + 6, h, ColorAlpha(col, glowAlpha));
-	DrawRectangle(x, y, w, h, col);
-
-	if (w > 2) {
-		DrawRectangle(x + (w / 2), y, 1, h, VIS_RED);
-	}
-}
-
-void DrawCoolRectangle(float x, float y, float width, float height, Color color)
-{
-	DrawRectangle(x, y, width, height, color);     //Use passed color
-	 
-	DrawRectangleLines(x, y, width, height, ColorAlpha(color, 0.3f)); // Gruvbox foreground
-	DrawCircle(x + width / 2, y, width / 4, ColorAlpha(color, 0.2f)); // Aqua as an accent
+	float tmp = halfWidth / static_cast<float>(BUCKET_COUNT) - BAR_SPACING;
+	tmp = std::ceilf(tmp);
+	this->barWidth = std::max(tmp, 1.0f);
 }
 
 bool GraphicsThread::Swap()
 {
 	return share_ag.swapConsumer(this->readBuffer);
+}
+
+void GraphicsThread::Update()
+{
+	this->Swap();
+
+	auto fftData = this->readBuffer;
+	if (!fftData || (*fftData).empty())
+	{
+		return;
+	}
+
+	fftProcess(fftData);
+	this->Draw();
 }
 
 void GraphicsThread::fftProcess(std::shared_ptr<std::vector<float>>& buff)
@@ -101,69 +120,56 @@ GraphicsThread::~GraphicsThread()
 	UnloadRenderTexture(target);
 }
 
-void GraphicsThread::Draw()
+void GraphicsThread::prepareVisuals()
 {
-	this->Swap();
-
-	auto buff = this->readBuffer;
-	if (!buff || (*buff).empty())
-	{
-		return;
-	}
-
-	fftProcess(buff);
-	size_t n = smoothState.size();
-
-	float barWidth = (halfWidth / (float)64) - BAR_SPACING;
-	barWidth = ceilf(barWidth);
-	barWidth = std::max(barWidth, 1.0f);
+	int bucketIndex = 0;
 	int centerY = screenHeight / 2;
 
-	BeginTextureMode(target);
+	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
+	{
+		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
+		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
+		int x = i * (barWidth + BAR_SPACING);
+		int xRight = static_cast<int>(halfWidth + x);
+		int xLeft = static_cast<int>(halfWidth - x - barWidth);
+		int ghostY = centerY - (ghostHeight / 2);
+		int mainY = centerY - (mainHeight / 2);
 
+		visBars[bucketIndex++] = Drawable{ 
+			Bar{ghostHeight, (int)barWidth, xLeft, xRight, ghostY}, 
+			DrawingDetails::drawGhostBar };
+		visBars[bucketIndex++] = Drawable{ 
+			Bar{mainHeight, (int)barWidth, xLeft, xRight, mainY}, 
+			DrawingDetails::drawMainBar };
+	};
+}
+
+void GraphicsThread::Draw()
+{
+	this->prepareVisuals();
+
+	BeginTextureMode(target);
 	BeginBlendMode(BLEND_ALPHA);
 	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
 	EndBlendMode();
 
 	BeginBlendMode(BLEND_ADDITIVE);
-	for (int i{}; i < (int)n; ++i)
+
+	for (auto& bar : this->visBars)
 	{
-		int mainH = (int)(smoothState[i] * screenHeight);
-		int ghostH = (int)(smearedState[i] * screenHeight);
-		int yMain = centerY - (mainH / 2);
-		int yGhost = centerY - (ghostH / 2);
-		float xOffset = i * (barWidth + BAR_SPACING);
-		int xRight = static_cast<int>(halfWidth + xOffset);
-		int xLeft = static_cast<int>(halfWidth - xOffset - barWidth);
-
-		if (ghostH > 0)
-		{
-			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.4f);
-			DrawRectangle(xRight, yGhost, (int)barWidth, ghostH, ghostColor);
-			DrawRectangle(xLeft, yGhost, (int)barWidth, ghostH, ghostColor);
-		}
-		if (mainH > 0) {
-			// Draw the Solid Bar
-			
-			DrawCoolRectangle(xRight, yMain, (int)barWidth, mainH, VIS_PURPLE);
-			DrawCoolRectangle(xLeft, yMain, (int)barWidth, mainH, VIS_PURPLE);
-
-			DrawRectangle(xRight + (int)barWidth / 2, yMain, 2, mainH, WHITE);
-			DrawRectangle(xLeft + (int)barWidth / 2, yMain, 2, mainH, WHITE);
-		}
+		draw(bar);
 	}
+
 	EndBlendMode();
 
 	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
 		screenWidth * 0.8f, BLANK, VIS_PURPLE);
 	EndBlendMode();
-
 	EndTextureMode();
 
 	BeginDrawing();
 	ClearBackground(BLACK);
-
 	float shake = smoothState[0] * 15.0f;
 	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
 	Rectangle destRec = { 0, 0, (float)screenWidth, (float)screenHeight };
@@ -182,4 +188,11 @@ void GraphicsThread::Draw()
 
 	DrawFPS(10, 10);
 	EndDrawing();
+}
+
+void DrawCoolRectangle(float x, float y, float width, float height, Color color)
+{
+	DrawRectangle(x, y, width, height, color);     //Use passed color
+	DrawRectangleLines(x, y, width, height, ColorAlpha(color, 0.3f)); // Gruvbox foreground
+	DrawCircle(x + width / 2, y, width / 4, ColorAlpha(color, 0.2f)); // Aqua as an accent
 }
