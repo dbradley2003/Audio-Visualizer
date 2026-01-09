@@ -137,11 +137,11 @@ void AnalyzerThread::ApplyHanning()
 
 void AnalyzerThread::Update()
 {
-	GetSamples();
-	
+	// process raw audio data for spectral analysis
+	this->GetSamples();
 	this->fftData = ComplexArray(this->samples.data(), SAMPLE_SIZE);
-	ApplyHanning();
-	fft(this->fftData);
+	this->ApplyHanning();
+	this->fft(this->fftData);
 
 	const float invSixety = 1.0f / 60.0f;
 	const int numBins = SAMPLE_SIZE / 2;
@@ -153,7 +153,6 @@ void AnalyzerThread::Update()
 		float normalized = (db + 60.0f) * invSixety;
 		(*this->outputBuckets)[i] = std::clamp(normalized, 0.0f, 1.0f);
 	}
-
 	// Make new data available to Visualizer
 	this->share_ag.swapProducer(this->outputBuckets);
 }

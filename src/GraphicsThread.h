@@ -11,7 +11,7 @@ class Drawable;
 class GraphicsThread {
 public:
 	static constexpr int BUCKET_COUNT = 64;
-	static constexpr int BAR_SPACING = 5;
+	static constexpr int BAR_SPACING = 2;
 
 	GraphicsThread(int screenHeight, int screenWidth, TripleBuffer<std::vector<float>>& share_ag);
 	GraphicsThread(const GraphicsThread&) = delete;
@@ -41,6 +41,7 @@ private:
 	float halfWidth;
 	float barWidth;
 	RenderTexture2D target;
+	Camera2D camera{ 0 };
 	const float SMOOTHNESS{ 30.0f };
 	const float SMEAREDNESS{ 5.0f };
 };

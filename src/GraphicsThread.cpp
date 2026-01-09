@@ -4,6 +4,7 @@
 #include <cmath>
 #include "Bar.h"
 #include "Drawable.h"
+#include <functional>
 
 #pragma warning(disable: 4244)
 
@@ -25,21 +26,44 @@ void DrawCoolRectangle(float x, float y, float width, float height, Color color)
 
 namespace DrawingDetails
 {
-	void drawGhostBar(const Bar& bar)
+	class GhostDrawer
 	{
-		if (bar.height() > 0) {
-			Color ghostColor = ColorAlpha(VIS_PURPLE, 0.4f);
-			DrawRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), ghostColor);
-			DrawRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), ghostColor);
+	public:
+		GhostDrawer(Color c)
+			:color_(c)
+		{
 		}
-	}
-	void drawMainBar(const Bar& bar) {
-		if (bar.height() > 0) {
-			DrawCoolRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
-			DrawCoolRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
-			DrawRectangle(bar.xRight() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
-			DrawRectangle(bar.xLeft() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+
+		void operator()(const Bar& bar)
+		{
+			if (bar.height() > 0) {
+				DrawRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), color_);
+				DrawRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), color_);
+			}
+		};
+	private:
+		Color color_;
+	};
+
+	class SolidDrawer
+	{
+	public:
+		SolidDrawer(Color c)
+			:color_(c)
+		{
 		}
+
+		void operator()(const Bar& bar)
+		{
+			if (bar.height() > 0) {
+				DrawCoolRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
+				DrawCoolRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
+				DrawRectangle(bar.xRight() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+				DrawRectangle(bar.xLeft() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+			}
+		};
+	private:
+		Color color_;
 	};
 }
 
@@ -51,7 +75,8 @@ GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<s
 	smoothState(BUCKET_COUNT),
 	smearedState(BUCKET_COUNT),
 	visBars(BUCKET_COUNT * 2)
-{}
+{
+}
 
 void GraphicsThread::Initialize()
 {
@@ -106,7 +131,10 @@ void GraphicsThread::fftProcess(std::shared_ptr<std::vector<float>>& buff)
 		float maxInGroup = 0.0f;
 		for (int q = fStart; q < fEnd; ++q)
 		{
-			if ((*buff)[q] > maxInGroup) maxInGroup = (*buff)[q];
+			if ((*buff)[q] > maxInGroup)
+			{
+				maxInGroup = (*buff)[q];
+			}
 		}
 
 		float dt = GetFrameTime();
@@ -122,11 +150,13 @@ GraphicsThread::~GraphicsThread()
 
 void GraphicsThread::prepareVisuals()
 {
-	int bucketIndex = 0;
+	int index = 0;
 	int centerY = screenHeight / 2;
 
 	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
 	{
+		float height = smoothState[i] * screenHeight;
+		
 		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
 		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
 		int x = i * (barWidth + BAR_SPACING);
@@ -135,21 +165,34 @@ void GraphicsThread::prepareVisuals()
 		int ghostY = centerY - (ghostHeight / 2);
 		int mainY = centerY - (mainHeight / 2);
 
-		visBars[bucketIndex++] = Drawable{ 
-			Bar{ghostHeight, (int)barWidth, xLeft, xRight, ghostY}, 
-			DrawingDetails::drawGhostBar };
-		visBars[bucketIndex++] = Drawable{ 
-			Bar{mainHeight, (int)barWidth, xLeft, xRight, mainY}, 
-			DrawingDetails::drawMainBar };
+		Color c;
+		if (height < 0.5)
+		{
+			c = ColorLerp(VIS_BLUE, VIS_PURPLE, height * 2.0f);
+		}
+		else
+		{
+			c = ColorLerp(VIS_PURPLE, WHITE, (height - 0.5f) * 2.0f);
+		}
+		
+		Color ghostColor = ColorAlpha(VIS_YELLOW, 0.4f);
+		std::function<void(const Bar&)> func = 
+			DrawingDetails::GhostDrawer(ghostColor);
+		std::function<void(const Bar&)> func2 = 
+			DrawingDetails::SolidDrawer(c);
+
+		visBars[index++] = Drawable{
+			Bar{ghostHeight, (int)barWidth, xLeft, xRight, ghostY},func};
+		visBars[index++] = Drawable{
+			Bar{mainHeight, (int)barWidth, xLeft, xRight, mainY},func2 };
 	};
 }
 
 void GraphicsThread::Draw()
 {
 	this->prepareVisuals();
-
 	BeginTextureMode(target);
-	BeginBlendMode(BLEND_ALPHA);
+	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
 	EndBlendMode();
 
@@ -187,7 +230,6 @@ void GraphicsThread::Draw()
 	EndBlendMode();
 
 	DrawFPS(10, 10);
-	EndDrawing();
 }
 
 void DrawCoolRectangle(float x, float y, float width, float height, Color color)

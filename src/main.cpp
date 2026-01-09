@@ -13,7 +13,7 @@
 
 int main()
 {
-	std::string filePath = "demos/audio10.wav";
+	std::string filePath = "demos/audio4.wav";
 
 	TripleBuffer<std::vector<float>> tripleBuffer{};
 
