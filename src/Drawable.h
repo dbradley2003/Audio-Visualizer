@@ -58,7 +58,7 @@ namespace detail
 
 using namespace detail;
 
-template<size_t Size =32U, size_t Alignment = sizeof(void*)>
+template<size_t Size =128U, size_t Alignment = sizeof(void*)>
 class Drawable
 {
 public:

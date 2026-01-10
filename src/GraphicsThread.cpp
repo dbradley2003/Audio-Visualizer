@@ -3,8 +3,7 @@
 #include "raylib.h"
 #include <cmath>
 #include "Bar.h"
-#include "Drawable.h"
-#include <functional>
+
 
 #pragma warning(disable: 4244)
 
@@ -24,8 +23,11 @@ using namespace std;
 
 void DrawCoolRectangle(float x, float y, float width, float height, Color color);
 
+
+
 namespace DrawingDetails
 {
+
 	class GhostDrawer
 	{
 	public:
@@ -73,7 +75,8 @@ GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<s
 	screenHeight(screenHeight),
 	share_ag(share_ag),
 	smoothState(BUCKET_COUNT),
-	smearedState(BUCKET_COUNT)
+	smearedState(BUCKET_COUNT),
+	pm(100, screenWidth, screenHeight)
 {
 }
 
@@ -86,11 +89,17 @@ void GraphicsThread::Initialize()
 	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
 	this->readBuffer = share_ag.consumerReadBuffer();
-	
+
 	this->halfWidth = static_cast<float>((screenWidth / 2.0f));
 	float tmp = halfWidth / static_cast<float>(BUCKET_COUNT) - BAR_SPACING;
 	tmp = std::ceilf(tmp);
 	this->barWidth = std::max(tmp, 1.0f);
+
+	mCamera.target = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
+	mCamera.offset = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
+	mCamera.rotation = 0.0f;
+	mCamera.zoom = 1.0f;
+	mTargetZoom = 1.0f;
 }
 
 bool GraphicsThread::Swap()
@@ -151,8 +160,32 @@ void GraphicsThread::prepareVisuals()
 {
 	int centerY = screenHeight / 2;
 
+	float bass = smoothState.empty() ? 0.0f : smoothState[0];
+	float treble = 0.0f;
+	int maxBin = std::min((int)smoothState.size(), 20);
+
+	if (!smoothState.empty())
+	{
+		int count = 0;
+		for (int i = 5; i < maxBin; ++i)
+		{
+			treble += smoothState[i];
+			++count;
+		}
+		if (count > 0) treble /= count;
+		treble *= 2.0f;
+	}
+
+	pm.update(bass, treble);
+	auto f = [](const ParticleGenerator& pg) {
+		pg();
+		};
+
+	visBars.emplace_back(std::ref(pm), f);
+
 	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
 	{
+
 		float height = smoothState[i] * screenHeight;
 		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
 		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
@@ -165,11 +198,15 @@ void GraphicsThread::prepareVisuals()
 		Color c;
 		if (height < 0.5)
 		{
-			c = ColorLerp(VIS_BLUE, VIS_PURPLE, height * 2.0f);
+			c = ColorLerp(CyberpunkColors::NEON_CYAN, CyberpunkColors::NEON_PURPLE, height * 2.0f);
 		}
 		else
 		{
-			c = ColorLerp(VIS_PURPLE, WHITE, (height - 0.5f) * 2.0f);
+			float t = (height - 0.5f) * 2.0f;
+			c = ColorLerp(CyberpunkColors::NEON_PURPLE, CyberpunkColors::NEON_PINK, t);
+
+			if (height > 0.9f) c = ColorLerp(c, WHITE, (height - 0.9f) * 10.0f);
+
 		}
 
 		auto drawSolidBars = [=](const Bar& bar)
@@ -179,7 +216,7 @@ void GraphicsThread::prepareVisuals()
 			};
 		auto drawGhostBars = [=](const Bar& bar)
 			{
-				DrawingDetails::GhostDrawer a(ColorAlpha(VIS_YELLOW, 0.4f));
+				DrawingDetails::GhostDrawer a(ColorAlpha(VIS_PURPLE, 0.4f));
 				a(bar);
 			};
 
@@ -196,28 +233,46 @@ void GraphicsThread::Draw()
 
 	this->prepareVisuals();
 
-	BeginTextureMode(target);
-	BeginBlendMode(BLEND_MULTIPLIED);
-	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
-	EndBlendMode();
-	BeginBlendMode(BLEND_ADDITIVE);
+	float bass = smoothState.empty() ? 0.0f : std::min(smoothState[0], 1.0f);
+	float bassShock = powf(bass, 3.0f);
+	float targetZoom = 1.0f + (bassShock * 0.05f);
+	mCamera.zoom += (targetZoom - mCamera.zoom) * 10.0f * GetFrameTime();
+	mCamera.rotation = sinf((float)GetTime() * 0.5f) * 2.0f;
 
+
+	BeginTextureMode(target);
+
+	BeginBlendMode(BLEND_ALPHA);
+	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 0,0,0,70 });
+	EndBlendMode();
+
+	BeginMode2D(mCamera);
+
+	BeginBlendMode(BLEND_ADDITIVE);
+	Color gridColor = ColorAlpha(CyberpunkColors::NEON_PURPLE, 0.15f);
+	float time = (float)GetTime();
+	for (int i = 0; i < 20;++i)
+	{
+		float y = (screenHeight / 2) + (i * i * 2) + (fmodf(time * 20.0f, 20.0f));
+		if (y < screenHeight) DrawLine(0, y, screenWidth, y, gridColor);
+	}
+	DrawLine(0, screenHeight / 2, screenWidth, screenHeight / 2, CyberpunkColors::NEON_PINK);
+	EndBlendMode();
+
+	BeginBlendMode(BLEND_ADDITIVE);
 	for (auto& bar : this->visBars)
 	{
 		draw(bar);
 	}
-
 	EndBlendMode();
-
-	BeginBlendMode(BLEND_MULTIPLIED);
-	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-		screenWidth * 0.8f, BLANK, VIS_PURPLE);
-	EndBlendMode();
+	EndMode2D();
 	EndTextureMode();
 
 	BeginDrawing();
 	ClearBackground(BLACK);
-	float shake = smoothState[0] * 15.0f;
+
+	float shake = smoothState.empty() ? 0.0f : smoothState[0] * 5.0f;
+
 	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
 	Rectangle destRec = { 0, 0, (float)screenWidth, (float)screenHeight };
 	Vector2 origin = { 0, 0 };
@@ -225,20 +280,45 @@ void GraphicsThread::Draw()
 	BeginBlendMode(BLEND_ADDITIVE);
 	DrawTexturePro(target.texture, srcRec,
 		{ -shake,0,(float)screenWidth, (float)screenHeight },
-		origin, 0.0f, RED);
+		origin, 0.0f, CyberpunkColors::NEON_PINK);
 	DrawTexturePro(target.texture, srcRec,
 		{ shake,0,(float)screenWidth, (float)screenHeight },
-		origin, 0.0f, BLUE);
+		origin, 0.0f, CyberpunkColors::NEON_CYAN);
+	DrawTexturePro(target.texture, srcRec, destRec, origin, 0.0f, WHITE);
+	EndBlendMode();
 
-	DrawTexturePro(target.texture, srcRec, destRec, origin, 0.0f, GREEN);
+	BeginBlendMode(BLEND_MULTIPLIED);
+	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
+		screenWidth * 1.3f, BLANK, BLACK);
+	EndBlendMode();
+
+	BeginBlendMode(BLEND_ALPHA);
+	for (int y = 0; y < screenHeight; y += 4)
+	{
+		DrawRectangle(0, y, screenWidth, 1, Color{ 0,0,0,100 });
+	}
 	EndBlendMode();
 
 	DrawFPS(10, 10);
+	EndDrawing();
 }
 
 void DrawCoolRectangle(float x, float y, float width, float height, Color color)
 {
-	DrawRectangle(x, y, width, height, color);     //Use passed color
-	DrawRectangleLines(x, y, width, height, ColorAlpha(color, 0.3f)); // Gruvbox foreground
-	DrawCircle(x + width / 2, y, width / 4, ColorAlpha(color, 0.2f)); // Aqua as an accent
+
+	if (width > 4)
+	{
+		DrawRectangle(x, y, width + 8, height, ColorAlpha(color, 0.2f));
+	}
+
+	Color coreColor = color;
+
+	DrawRectangle(x + 1, y, width - 2, height, ColorAlpha(coreColor, 0.8f));
+
+	if (width > 2)
+	{
+		DrawRectangle(x + width / 2 - 1, y, 2, height, ColorAlpha(WHITE, 0.5f));
+	}
+
+	DrawCircle(x + width / 2, y, width / 2, ColorAlpha(color, 0.4f));
 }

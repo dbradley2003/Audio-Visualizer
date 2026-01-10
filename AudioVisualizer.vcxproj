@@ -205,6 +205,7 @@
   <ItemGroup>
     <ClInclude Include="src\Bar.h" />
     <ClInclude Include="src\Drawable.h" />
+    <ClInclude Include="src\ParticleGenerator.h" />
     <ClInclude Include="src\TripleBuffer.h" />
     <ClInclude Include="include\dj_fft.h" />
     <ClInclude Include="include\miniaudio.h" />

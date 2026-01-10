@@ -7,6 +7,7 @@
 #include "TripleBuffer.h"
 #include "Bar.h"
 #include "Drawable.h"
+#include "ParticleGenerator.h"
 
 class GraphicsThread {
 public:
@@ -41,7 +42,9 @@ private:
 	float halfWidth;
 	float barWidth;
 	RenderTexture2D target;
-	Camera2D camera{ 0 };
+	ParticleGenerator pm;
+	Camera2D mCamera;
+	float mTargetZoom;
 	const float SMOOTHNESS{ 30.0f };
 	const float SMEAREDNESS{ 5.0f };
 };
