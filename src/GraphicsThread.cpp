@@ -73,8 +73,7 @@ GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<s
 	screenHeight(screenHeight),
 	share_ag(share_ag),
 	smoothState(BUCKET_COUNT),
-	smearedState(BUCKET_COUNT),
-	visBars(BUCKET_COUNT * 2)
+	smearedState(BUCKET_COUNT)
 {
 }
 
@@ -87,8 +86,8 @@ void GraphicsThread::Initialize()
 	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
 	this->readBuffer = share_ag.consumerReadBuffer();
+	
 	this->halfWidth = static_cast<float>((screenWidth / 2.0f));
-
 	float tmp = halfWidth / static_cast<float>(BUCKET_COUNT) - BAR_SPACING;
 	tmp = std::ceilf(tmp);
 	this->barWidth = std::max(tmp, 1.0f);
@@ -150,13 +149,11 @@ GraphicsThread::~GraphicsThread()
 
 void GraphicsThread::prepareVisuals()
 {
-	int index = 0;
 	int centerY = screenHeight / 2;
 
 	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
 	{
 		float height = smoothState[i] * screenHeight;
-		
 		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
 		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
 		int x = i * (barWidth + BAR_SPACING);
@@ -174,28 +171,35 @@ void GraphicsThread::prepareVisuals()
 		{
 			c = ColorLerp(VIS_PURPLE, WHITE, (height - 0.5f) * 2.0f);
 		}
-		
-		Color ghostColor = ColorAlpha(VIS_YELLOW, 0.4f);
-		std::function<void(const Bar&)> func = 
-			DrawingDetails::GhostDrawer(ghostColor);
-		std::function<void(const Bar&)> func2 = 
-			DrawingDetails::SolidDrawer(c);
 
-		visBars[index++] = Drawable{
-			Bar{ghostHeight, (int)barWidth, xLeft, xRight, ghostY},func};
-		visBars[index++] = Drawable{
-			Bar{mainHeight, (int)barWidth, xLeft, xRight, mainY},func2 };
+		auto drawSolidBars = [=](const Bar& bar)
+			{
+				DrawingDetails::SolidDrawer a(c);
+				a(bar);
+			};
+		auto drawGhostBars = [=](const Bar& bar)
+			{
+				DrawingDetails::GhostDrawer a(ColorAlpha(VIS_YELLOW, 0.4f));
+				a(bar);
+			};
+
+		visBars.emplace_back(Bar{ mainHeight, (int)barWidth, xLeft, xRight, mainY }, drawSolidBars);
+		visBars.emplace_back(Bar{ ghostHeight, (int)barWidth, xLeft, xRight, ghostY }, drawGhostBars);
 	};
 }
 
 void GraphicsThread::Draw()
 {
+	// clear and reserve memory for visual bars before drawing
+	visBars.clear();
+	visBars.reserve(BUCKET_COUNT * 2);
+
 	this->prepareVisuals();
+
 	BeginTextureMode(target);
 	BeginBlendMode(BLEND_MULTIPLIED);
 	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 5,10,20,30 });
 	EndBlendMode();
-
 	BeginBlendMode(BLEND_ADDITIVE);
 
 	for (auto& bar : this->visBars)

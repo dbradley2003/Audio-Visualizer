@@ -5,8 +5,8 @@
 #include <memory>
 #include "raylib.h"
 #include "TripleBuffer.h"
-
-class Drawable;
+#include "Bar.h"
+#include "Drawable.h"
 
 class GraphicsThread {
 public:
@@ -30,7 +30,7 @@ private:
 	std::shared_ptr<std::vector<float>> readBuffer;
 	std::vector<float> smoothState;
 	std::vector<float> smearedState;
-	std::vector<Drawable> visBars;
+	std::vector<Drawable<>> visBars;
 
 	TripleBuffer<std::vector<float>>& share_ag;
 
