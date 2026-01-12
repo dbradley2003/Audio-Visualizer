@@ -92,7 +92,7 @@ void GraphicsThread::Initialize()
 	mCamera.offset = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
 	mCamera.rotation = 0.0f;
 
-	particleGenerator.Init(200, screenWidth, screenHeight);
+	particleGenerator.Init(500, screenWidth, screenHeight);
 }
 
 bool GraphicsThread::Swap()
@@ -258,27 +258,31 @@ void GraphicsThread::DrawTex()
 	float bass = smoothState.empty() ? 0.0f : smoothState[0];
 	float dt = GetFrameTime();
 	float time = GetTime();
-	float shakeInput = 0.0f;
+	//float shakeInput = 0.0f;
 
-	if (bass > 0.6f)
+	static float shakeEnergy = 0.0f;
+
+	if (bass > 0.7f)
 	{
-		float hitStrength = (bass - 0.6f) / 0.3f;
-		shakeInput += hitStrength * 0.3f;
-		if (shakeInput > 1.0f)
+		float hitStrength = (bass - 0.7f) / 0.3f;
+		shakeEnergy += hitStrength * 0.1f;
+		if (shakeEnergy > 1.0f)
 		{
-			shakeInput = 1.0f;
+			shakeEnergy = 1.0f;
 		}
 	}
 
-	shakeInput -= 2.0f * dt;
-	if (shakeInput < 0.0f)
+	shakeEnergy -= 3.0f * dt;
+	if (shakeEnergy < 0.0f)
 	{
-		shakeInput = 0.0f;
+		shakeEnergy = 0.0f;
 	}
 
-	float shakePower = shakeInput * shakeInput * 15.0f;
-	float shakeX = sinf(time * 50.0f) * shakePower;
-	float shakeY = cosf(time * 40.0f) * (shakePower * 0.5f);
+	
+
+	float shakePower = shakeEnergy * shakeEnergy * 4.0f;
+	float shakeX = sinf(time * 30.0f) * shakePower;
+	float shakeY = cosf(time * 20.0f) * (shakePower * 0.5f);
 
 	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
 	Vector2 origin = { 0, 0 };

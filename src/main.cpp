@@ -17,7 +17,7 @@ std::atomic<bool> doneFlag(false);
 
 int main()
 {
-	std::string filePath = "demos/audio7.wav";
+	std::string filePath = "demos/audio11.wav";
 
 	TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
 
