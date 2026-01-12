@@ -7,20 +7,23 @@
 #include "TripleBuffer.h"
 #include "raylib.h"
 
-
+#include "constants.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "winmm.lib")
 
 
-std::atomic<bool> done(false);
+
+std::atomic<bool> doneFlag(false);
+
+using namespace Constants;
 
 int main()
 {
-	std::string filePath = "demos/audio12.wav";
+	std::string filePath = "demos/audio4.wav";
 
-	TripleBuffer<std::vector<float>> tripleBuffer;
+	TripleBuffer<std::vector<float>> tripleBuffer(BIN_COUNT);
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
 	RingBuffer ringBuffer = RingBuffer();
@@ -30,8 +33,10 @@ int main()
 	// launched as a functor in its overloaded operator()
 	AnalyzerThread analyzerThread = AnalyzerThread(
 		std::ref(ringBuffer), 
-		std::ref(tripleBuffer)
+		std::ref(tripleBuffer),
+		std::ref(doneFlag)
 	);
+
 	analyzerThread.Launch(); 
 	
 	if (!audioObj.Init())
@@ -49,5 +54,8 @@ int main()
 		visualizer.Update();
 		EndDrawing();
 	}
+
+	doneFlag.store(true);
+	
 	return EXIT_SUCCESS;
 }

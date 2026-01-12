@@ -8,20 +8,22 @@
 #include <array>
 #include <thread>
 #include "TripleBuffer.h"
+#include <atomic>
+
+#include "constants.h"
 
 class RingBuffer;
 
 typedef std::complex<double> ComplexValue;
 typedef std::valarray<ComplexValue> ComplexArray;
 
+using namespace Constants;
+
 class AnalyzerThread
 {
 public:
-
-	static constexpr int SAMPLE_SIZE = 1024;
-	static const int HOP_SIZE = 256;
-
-	AnalyzerThread(RingBuffer& buffer, TripleBuffer<std::vector<float>>& share_ag);
+	AnalyzerThread(RingBuffer& buffer, 
+		TripleBuffer<std::vector<float>>& share_ag, std::atomic<bool>& done);
 	AnalyzerThread(const AnalyzerThread&) = delete;
 	AnalyzerThread(AnalyzerThread&&) = delete;
 	AnalyzerThread& operator=(const AnalyzerThread&) = delete;
@@ -40,13 +42,14 @@ private:
 
 	RingBuffer& ringBuffer;
 
-	std::array<ComplexValue, SAMPLE_SIZE> samples;
-	std::array<float, SAMPLE_SIZE> m_hannTable;
-	std::shared_ptr<std::vector<float>> outputBuckets;
+	std::array<ComplexValue, FFT_SIZE> samples;
+	std::array<float, FFT_SIZE> m_hannTable;
+	std::unique_ptr<std::vector<float>> outputBuckets;
 	
 	ComplexArray fftData;
 	TripleBuffer<std::vector<float>>& share_ag;
 	std::thread mThread;
+	std::atomic<bool>& done;
 };
 
 #endif

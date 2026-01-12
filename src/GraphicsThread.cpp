@@ -1,29 +1,14 @@
 #include "GraphicsThread.h"
 
-#include "raylib.h"
 #include <cmath>
-#include "Bar.h"
 
+#include "raylib.h"
+#include "Bar.h"
 
 #pragma warning(disable: 4244)
 
-#define VIS_RED \
-  Color{ 251, 73, 52, 255 } // #fb4934
-
-#define VIS_BLUE \
-  Color{ 131, 165, 152, 255 } // #83a598
-
-#define VIS_YELLOW \
-  Color{ 250, 189, 47, 255 } // #fabd2f
-
-#define VIS_PURPLE \
-  Color{ 211, 134, 155, 255 } // #d3869b
-
 using namespace std;
-
 void DrawCoolRectangle(float x, float y, float width, float height, Color color);
-
-
 
 namespace DrawingDetails
 {
@@ -39,8 +24,12 @@ namespace DrawingDetails
 		void operator()(const Bar& bar)
 		{
 			if (bar.height() > 0) {
-				DrawRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), color_);
-				DrawRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), color_);
+
+				Color invisible = ColorAlpha(color_, 0.0f);
+				Color visible = ColorAlpha(color_, 0.4f);
+
+				DrawRectangleGradientV(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), visible, invisible);
+				DrawRectangleGradientV(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), visible, invisible);
 			}
 		};
 	private:
@@ -58,10 +47,8 @@ namespace DrawingDetails
 		void operator()(const Bar& bar)
 		{
 			if (bar.height() > 0) {
-				DrawCoolRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
-				DrawCoolRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), VIS_PURPLE);
-				DrawRectangle(bar.xRight() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
-				DrawRectangle(bar.xLeft() + (int)bar.width() / 2, bar.y(), 2, bar.height(), WHITE);
+				DrawCoolRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), color_);
+				DrawCoolRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), color_);
 			}
 		};
 	private:
@@ -69,37 +56,42 @@ namespace DrawingDetails
 	};
 }
 
-GraphicsThread::GraphicsThread(int screenWidth, int screenHeight, TripleBuffer<std::vector<float>>& share_ag)
+GraphicsThread::GraphicsThread(int w, int h, TripleBuffer<std::vector<float>>& share_ag)
 	:
-	screenWidth(screenWidth),
-	screenHeight(screenHeight),
+	screenWidth(w),
+	screenHeight(h),
 	share_ag(share_ag),
-	smoothState(BUCKET_COUNT),
-	smearedState(BUCKET_COUNT),
-	pm(100, screenWidth, screenHeight)
+	smoothState(BUCKET_COUNT, 0.0f),
+	smearedState(BUCKET_COUNT, 0.0f),
+	mTargetZoom(1.0f),
+	particleGenerator()
 {
+	visBars.reserve(BUCKET_COUNT * 2);
 }
 
 void GraphicsThread::Initialize()
 {
-	SetConfigFlags(FLAG_VSYNC_HINT);
+	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
+	SetTargetFPS(144);
+
+	SetTextureWrap(target.texture, TEXTURE_WRAP_CLAMP);
+
+	this->halfWidth = (float)screenWidth / 2.0f;
+	float availableWidth = halfWidth - (BAR_SPACING * BUCKET_COUNT);
+	this->barWidth = std::max(std::floor(availableWidth / (float)BUCKET_COUNT), 1.0f);
 
 	this->target = LoadRenderTexture(screenWidth, screenHeight);
 	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
 	this->readBuffer = share_ag.consumerReadBuffer();
 
-	this->halfWidth = static_cast<float>((screenWidth / 2.0f));
-	float tmp = halfWidth / static_cast<float>(BUCKET_COUNT) - BAR_SPACING;
-	tmp = std::ceilf(tmp);
-	this->barWidth = std::max(tmp, 1.0f);
-
+	mCamera.zoom = 1.0f;
 	mCamera.target = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
 	mCamera.offset = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
 	mCamera.rotation = 0.0f;
-	mCamera.zoom = 1.0f;
-	mTargetZoom = 1.0f;
+
+	particleGenerator.Init(200, screenWidth, screenHeight);
 }
 
 bool GraphicsThread::Swap()
@@ -110,43 +102,43 @@ bool GraphicsThread::Swap()
 void GraphicsThread::Update()
 {
 	this->Swap();
-
-	auto fftData = this->readBuffer;
-	if (!fftData || (*fftData).empty())
+	if (!this->readBuffer || (*this->readBuffer).empty())
 	{
 		return;
 	}
-
-	fftProcess(fftData);
+	this->fftProcess();
 	this->Draw();
 }
 
-void GraphicsThread::fftProcess(std::shared_ptr<std::vector<float>>& buff)
+void GraphicsThread::fftProcess()
 {
+	int numInputBins = (int)(*this->readBuffer).size() / 2;
 	int numBuckets = BUCKET_COUNT;
 	for (int bar{ 0 }; bar < numBuckets; ++bar)
 	{
 		float tStart = (float)bar / (float)numBuckets;
 		float tEnd = (float)(bar + 1) / (float)numBuckets;
 
-		int fStart = (int)(powf(tStart, 2.0f) * 512.0f);
-		int fEnd = (int)(powf(tEnd, 2.0f) * 512.0f);
+		int fStart = (int)(powf(tStart, 2.5f) * (float)numInputBins);
+		int fEnd = (int)(powf(tEnd, 2.5f) * (float)numInputBins);
 
 		if (fStart < 2) fStart = 2;
 		if (fEnd <= fStart) fEnd = fStart + 1;
-		if (fEnd > 512) fEnd = 512;
+		if (fEnd > numInputBins) fEnd = numInputBins;
 
-		float maxInGroup = 0.0f;
+		float sum = 0.0f;
+		int count = 0;
+
 		for (int q = fStart; q < fEnd; ++q)
 		{
-			if ((*buff)[q] > maxInGroup)
-			{
-				maxInGroup = (*buff)[q];
-			}
+			sum += (*readBuffer)[q];
+			count++;
 		}
 
+		float val = (count > 0) ? (sum / count) : 0.0f;
 		float dt = GetFrameTime();
-		smoothState[bar] += (maxInGroup - smoothState[bar]) * SMOOTHNESS * dt;
+
+		smoothState[bar] += (val - smoothState[bar]) * SMOOTHNESS * dt;
 		smearedState[bar] += (smoothState[bar] - smearedState[bar]) * SMEAREDNESS * dt;
 	}
 }
@@ -159,7 +151,6 @@ GraphicsThread::~GraphicsThread()
 void GraphicsThread::prepareVisuals()
 {
 	int centerY = screenHeight / 2;
-
 	float bass = smoothState.empty() ? 0.0f : smoothState[0];
 	float treble = 0.0f;
 	int maxBin = std::min((int)smoothState.size(), 20);
@@ -176,16 +167,16 @@ void GraphicsThread::prepareVisuals()
 		treble *= 2.0f;
 	}
 
-	pm.update(bass, treble);
+	particleGenerator.update(bass, treble);
+
 	auto f = [](const ParticleGenerator& pg) {
 		pg();
 		};
 
-	visBars.emplace_back(std::ref(pm), f);
+	visBars.emplace_back(std::ref(particleGenerator), f);
 
 	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
 	{
-
 		float height = smoothState[i] * screenHeight;
 		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
 		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
@@ -205,7 +196,7 @@ void GraphicsThread::prepareVisuals()
 			float t = (height - 0.5f) * 2.0f;
 			c = ColorLerp(CyberpunkColors::NEON_PURPLE, CyberpunkColors::NEON_PINK, t);
 
-			if (height > 0.9f) c = ColorLerp(c, WHITE, (height - 0.9f) * 10.0f);
+			if (height > 0.9f) c = ColorLerp(c, CyberpunkColors::NEON_PINK, (height - 0.9f) * 10.0f);
 
 		}
 
@@ -216,7 +207,7 @@ void GraphicsThread::prepareVisuals()
 			};
 		auto drawGhostBars = [=](const Bar& bar)
 			{
-				DrawingDetails::GhostDrawer a(ColorAlpha(VIS_PURPLE, 0.4f));
+				DrawingDetails::GhostDrawer a(ColorAlpha(c, 0.5f));
 				a(bar);
 			};
 
@@ -236,14 +227,13 @@ void GraphicsThread::Draw()
 	float bass = smoothState.empty() ? 0.0f : std::min(smoothState[0], 1.0f);
 	float bassShock = powf(bass, 3.0f);
 	float targetZoom = 1.0f + (bassShock * 0.05f);
+
 	mCamera.zoom += (targetZoom - mCamera.zoom) * 10.0f * GetFrameTime();
 	mCamera.rotation = sinf((float)GetTime() * 0.5f) * 2.0f;
-
-
 	BeginTextureMode(target);
 
 	BeginBlendMode(BLEND_ALPHA);
-	DrawRectangle(0, 0, screenWidth, screenHeight, Color{ 0,0,0,70 });
+	DrawRectangle(0, 0, target.texture.width, target.texture.height, Color{ 0,0,0,70 });
 	EndBlendMode();
 
 	BeginMode2D(mCamera);
@@ -251,52 +241,44 @@ void GraphicsThread::Draw()
 	BeginBlendMode(BLEND_ADDITIVE);
 	Color gridColor = ColorAlpha(CyberpunkColors::NEON_PURPLE, 0.15f);
 	float time = (float)GetTime();
-	for (int i = 0; i < 20;++i)
+	for (int i = 0; i < 20; ++i)
 	{
 		float y = (screenHeight / 2) + (i * i * 2) + (fmodf(time * 20.0f, 20.0f));
-		if (y < screenHeight) DrawLine(0, y, screenWidth, y, gridColor);
+		if (y < screenHeight) DrawLine(-200, y, screenWidth + 200, y, gridColor);
 	}
-	DrawLine(0, screenHeight / 2, screenWidth, screenHeight / 2, CyberpunkColors::NEON_PINK);
+	DrawLine(-200, screenHeight / 2, screenWidth + 200, screenHeight / 2, CyberpunkColors::NEON_PINK);
 	EndBlendMode();
 
 	BeginBlendMode(BLEND_ADDITIVE);
-	for (auto& bar : this->visBars)
+	for (auto& visual : this->visBars)
 	{
-		draw(bar);
+		draw(visual);
 	}
+
 	EndBlendMode();
+
 	EndMode2D();
 	EndTextureMode();
 
 	BeginDrawing();
 	ClearBackground(BLACK);
 
-	float shake = smoothState.empty() ? 0.0f : smoothState[0] * 5.0f;
+	float shakeBase = smoothState.empty() ? 0.0f : smoothState[0] * 3.0f;
+	float shake = fminf(powf(shakeBase, 2.0f) * 10.0f, 10.0f);
 
 	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
-	Rectangle destRec = { 0, 0, (float)screenWidth, (float)screenHeight };
 	Vector2 origin = { 0, 0 };
 
-	BeginBlendMode(BLEND_ADDITIVE);
+	BeginBlendMode(BLEND_ALPHA);
 	DrawTexturePro(target.texture, srcRec,
-		{ -shake,0,(float)screenWidth, (float)screenHeight },
-		origin, 0.0f, CyberpunkColors::NEON_PINK);
-	DrawTexturePro(target.texture, srcRec,
-		{ shake,0,(float)screenWidth, (float)screenHeight },
-		origin, 0.0f, CyberpunkColors::NEON_CYAN);
-	DrawTexturePro(target.texture, srcRec, destRec, origin, 0.0f, WHITE);
+		{ shake, 0, (float)screenWidth, (float)screenHeight },
+		origin, 0.0f, WHITE);
 	EndBlendMode();
+
 
 	BeginBlendMode(BLEND_MULTIPLIED);
-	DrawCircleGradient(screenWidth / 2, screenHeight / 2,
-		screenWidth * 1.3f, BLANK, BLACK);
-	EndBlendMode();
-
-	BeginBlendMode(BLEND_ALPHA);
-	for (int y = 0; y < screenHeight; y += 4)
-	{
-		DrawRectangle(0, y, screenWidth, 1, Color{ 0,0,0,100 });
-	}
+	float vigRadius = screenWidth * (1.3f - (bassShock * 0.1f));
+	DrawCircleGradient(screenWidth / 2, screenHeight / 2, vigRadius, WHITE, Color{ 80, 80, 80, 255 });
 	EndBlendMode();
 
 	DrawFPS(10, 10);

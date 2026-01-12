@@ -4,9 +4,6 @@
 #include "raylib.h"
 #include <vector>
 
-#define VIS_PURPLE \
-  Color{ 211, 134, 155, 255 } // #d3869b
-
 namespace CyberpunkColors {
 	const Color NEON_CYAN = { 0, 243, 255, 255 };   // TRON Blue
 	const Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
@@ -28,7 +25,13 @@ struct ParticleGenerator
 
 	mutable std::vector<Particle> particles;
 
-	ParticleGenerator(int count, int w, int h)
+	ParticleGenerator(const ParticleGenerator&) = delete;
+	ParticleGenerator()
+		:h_(0),
+		w_(0)
+	{ }
+
+	void Init(int count, int w, int h)
 	{
 		particles.resize(count);
 		for (auto& p : particles)
@@ -45,32 +48,28 @@ struct ParticleGenerator
 
 			p.alphaOffset = (float)GetRandomValue(0, 100) / 10.0f;
 		}
-
-		h_ = h;
-		w_ = w;
+		this->h_ = h;
+		this->w_ = w;
 	}
 
 	void update(float rawBass, float rawTreble)
 	{
-
-		//float energy = std::min(rawEnergy, 1.0f);
-
 		float bass = std::min(rawBass, 1.0f);
 		float treble = std::min(rawTreble, 1.0f);
 
-		float bassShock = powf(bass, 5.0f);
+		float bassShock = powf(bass, 3.0f);
 		float trebleShock = powf(treble, 2.0f);
 
 		float dt = GetFrameTime();
 
-		float speedMult = 1.0f + (bassShock * 12.0f);
+		float speedMult = 1.0f + (bassShock * 20.0f);
 
 		for (auto& p : particles)
 		{
 			float moveX = p.velocity.x * speedMult;
 			float moveY = p.velocity.y * speedMult;
 
-			float maxSpeed = 200.0f;
+			float maxSpeed = 350.0f;
 
 			if (moveX > maxSpeed) moveX = maxSpeed;
 			if (moveX < -maxSpeed) moveX = -maxSpeed;

@@ -11,23 +11,28 @@
 
 #define PI 3.14159265358979323846f
 
-AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, TripleBuffer<std::vector<float>>& _share_ag)
+
+
+AnalyzerThread::AnalyzerThread(RingBuffer& _ringBuffer, 
+	TripleBuffer<std::vector<float>>& _share_ag, std::atomic<bool>& _done)
 	:
 	ringBuffer(_ringBuffer),
 	share_ag(_share_ag),
-	mThread()
+	mThread(),
+	done(_done)
 {
 	this->outputBuckets = this->share_ag.producerWriteBuffer();
 	std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
 	std::fill(samples.begin(), samples.end(), 0);
-	InitHannTable();
+	this->InitHannTable();
 }
 
 void AnalyzerThread::InitHannTable()
 {
-	for (int i{}; i < SAMPLE_SIZE; ++i)
+	int n = Constants::FFT_SIZE;
+	for (int i{}; i < n; ++i)
 	{
-		this->m_hannTable[i] = 0.54 - 0.46 * cosf(2.0f * PI * i / (SAMPLE_SIZE - 1));
+		this->m_hannTable[i] = 0.54 - 0.46 * cosf(2.0f * PI * i / (n - 1));
 	}
 }
 
@@ -85,7 +90,7 @@ void AnalyzerThread::fft(ComplexArray& d)
 
 void AnalyzerThread::operator()()
 {
-	while (true)
+	while (!done)
 	{
 		Update();
 	}
@@ -108,18 +113,20 @@ void AnalyzerThread::GetSamples()
 {
 	float val;
 	int available = ringBuffer.GetAvailable();
-	if (available > HOP_SIZE) {
+	const int hopSize = HOP_SIZE;
+
+	if (available > hopSize) {
 
 		// move window 128 items over
 		std::copy(
-			this->samples.begin() + HOP_SIZE,
+			this->samples.begin() + hopSize,
 			this->samples.end(),
 			this->samples.begin()
 		);
 
-		size_t writeIndex = SAMPLE_SIZE - HOP_SIZE;
+		size_t writeIndex = FFT_SIZE - hopSize;
 		
-		for (int i = 0; i < HOP_SIZE; ++i)
+		for (int i = 0; i < hopSize; ++i)
 		{
 			ringBuffer.PopFront(val);
 			this->samples[writeIndex + i] = { val, 0 };
@@ -129,7 +136,7 @@ void AnalyzerThread::GetSamples()
 
 void AnalyzerThread::ApplyHanning()
 {
-	for (int i{}; i < SAMPLE_SIZE; ++i)
+	for (int i{}; i < FFT_SIZE; ++i)
 	{
 		this->fftData[i] *= this->m_hannTable[i];
 	}
@@ -139,14 +146,14 @@ void AnalyzerThread::Update()
 {
 	// process raw audio data for spectral analysis
 	this->GetSamples();
-	this->fftData = ComplexArray(this->samples.data(), SAMPLE_SIZE);
+	this->fftData = ComplexArray(this->samples.data(), FFT_SIZE);
 	this->ApplyHanning();
 	this->fft(this->fftData);
 
 	const float invSixety = 1.0f / 60.0f;
-	const int numBins = SAMPLE_SIZE / 2;
+	const int binCount = FFT_SIZE / 2;
 
-	for (int i{}; i < numBins; ++i)
+	for (int i{}; i < binCount; ++i)
 	{
 		float squaredMag = std::norm(this->fftData[i]);
 		float db = 10.0f * log10f(squaredMag + 1e-12f);

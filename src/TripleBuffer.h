@@ -29,36 +29,34 @@ template<typename T>
 class TripleBuffer
 {
 public:
-
-	static constexpr int NUM_FREQ_BINS = 512;
-
-	TripleBuffer()
+	static constexpr int FFT_SIZE = 512;
+	TripleBuffer(int size)
 		:
 		mtx(),
 		newDataReady(false),
-		sharedBuffer(std::make_shared<T>(NUM_FREQ_BINS)),
-		producerWriteBuffer_(std::make_shared<T>(NUM_FREQ_BINS)),
-		consumerReadBuffer_(std::make_shared<T>(NUM_FREQ_BINS))
+		sharedBuffer(std::make_unique<T>(size)),
+		producerWriteBuffer_(std::make_unique<T>(size)),
+		consumerReadBuffer_(std::make_unique<T>(size))
 	{}
 
-	std::shared_ptr<T> producerWriteBuffer()
+	std::unique_ptr<T> producerWriteBuffer()
 	{
 		return std::move(this->producerWriteBuffer_);
 	}
 
-	std::shared_ptr<T> consumerReadBuffer()
+	std::unique_ptr<T> consumerReadBuffer()
 	{
 		return std::move(this->consumerReadBuffer_);
 	}
 
-	void swapProducer(std::shared_ptr<T>& producerBuff)
+	void swapProducer(std::unique_ptr<T>& producerBuff)
 	{
 		std::lock_guard<std::mutex> lck(mtx);
 		std::swap(this->sharedBuffer, producerBuff);
 		newDataReady = true;
 	}
 
-	bool swapConsumer(std::shared_ptr<T>& consumerBuff)
+	bool swapConsumer(std::unique_ptr<T>& consumerBuff)
 	{
 		std::unique_lock<std::mutex> lck(mtx, std::try_to_lock);
 		if (!newDataReady.load() || !lck)
@@ -74,9 +72,9 @@ private:
 	std::mutex mtx;
 	std::atomic<bool> newDataReady;
 
-	std::shared_ptr<T> sharedBuffer;
-	std::shared_ptr<T> producerWriteBuffer_;
-	std::shared_ptr<T> consumerReadBuffer_;
+	std::unique_ptr<T> sharedBuffer;
+	std::unique_ptr<T> producerWriteBuffer_;
+	std::unique_ptr<T> consumerReadBuffer_;
 };
 
 #endif
