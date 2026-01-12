@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "raylib.h"
+#include "raymath.h"
 #include "Bar.h"
 
 #pragma warning(disable: 4244)
@@ -175,6 +176,7 @@ void GraphicsThread::prepareVisuals()
 
 	visBars.emplace_back(std::ref(particleGenerator), f);
 
+	float bassShock = powf(bass, 3.0f);
 	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
 	{
 		float height = smoothState[i] * screenHeight;
@@ -186,28 +188,49 @@ void GraphicsThread::prepareVisuals()
 		int ghostY = centerY - (ghostHeight / 2);
 		int mainY = centerY - (mainHeight / 2);
 
-		Color c;
-		if (height < 0.5)
+		Color normalTop = BLACK;
+		Color normalBot = CyberpunkColors::DARK_CYAN;
+
+
+		if (height < 0.8f)
 		{
-			c = ColorLerp(CyberpunkColors::NEON_CYAN, CyberpunkColors::NEON_PURPLE, height * 2.0f);
+			normalTop = ColorLerp(BLACK, CyberpunkColors::NEON_CYAN, height * 1.25f);
 		}
 		else
 		{
-			float t = (height - 0.5f) * 2.0f;
-			c = ColorLerp(CyberpunkColors::NEON_PURPLE, CyberpunkColors::NEON_PINK, t);
+			float t = (height - 0.8f) * 5.0f;
+			Color iceBlue = { 180,255,255,255 };
+			normalTop = ColorLerp(CyberpunkColors::NEON_CYAN, iceBlue, t);
 
-			if (height > 0.9f) c = ColorLerp(c, CyberpunkColors::NEON_PINK, (height - 0.9f) * 10.0f);
-
+			if (height > 0.9f) normalTop = ColorLerp(normalTop, WHITE, (height - 0.9f) * 10.0f);
 		}
+
+		Color dropTop = {40,0,0,255};
+		Color dropBot = { 255,60,0,255};
+
+		if(bassShock > 0.8f)
+		{
+			dropTop = ColorLerp(dropTop, {255,255,200,255}, (bassShock - 0.8f) * 5.0f);
+		}
+
+		Color finalTop = ColorLerp(normalTop, dropTop, bassShock);
+		Color finalBot = ColorLerp(normalBot, dropBot, bassShock);
 
 		auto drawSolidBars = [=](const Bar& bar)
 			{
-				DrawingDetails::SolidDrawer a(c);
-				a(bar);
+				DrawRectangleGradientV(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), finalBot, finalTop);
+				DrawRectangleGradientV(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), finalBot, finalTop);
+
+				DrawRectangle(bar.xLeft(), bar.y(), bar.width(), 2, ColorAlpha(WHITE, 0.8f));
+				DrawRectangle(bar.xRight(), bar.y(), bar.width(), 2, ColorAlpha(WHITE, 0.8f));
 			};
 		auto drawGhostBars = [=](const Bar& bar)
 			{
-				DrawingDetails::GhostDrawer a(ColorAlpha(c, 0.5f));
+				Color ghostBase = { 0,220,255,255 };
+				Color ghostDrop = { 255,60,0,255 };
+
+				Color ghostColor = ColorLerp(ghostBase, ghostDrop, bassShock);
+				DrawingDetails::GhostDrawer a(ColorAlpha(ghostColor, 0.25f));
 				a(bar);
 			};
 
@@ -216,68 +239,151 @@ void GraphicsThread::prepareVisuals()
 	};
 }
 
-void GraphicsThread::Draw()
+void GraphicsThread::DrawGridLines()
 {
-	// clear and reserve memory for visual bars before drawing
-	visBars.clear();
-	visBars.reserve(BUCKET_COUNT * 2);
-
-	this->prepareVisuals();
-
-	float bass = smoothState.empty() ? 0.0f : std::min(smoothState[0], 1.0f);
-	float bassShock = powf(bass, 3.0f);
-	float targetZoom = 1.0f + (bassShock * 0.05f);
-
-	mCamera.zoom += (targetZoom - mCamera.zoom) * 10.0f * GetFrameTime();
-	mCamera.rotation = sinf((float)GetTime() * 0.5f) * 2.0f;
-	BeginTextureMode(target);
-
-	BeginBlendMode(BLEND_ALPHA);
-	DrawRectangle(0, 0, target.texture.width, target.texture.height, Color{ 0,0,0,70 });
-	EndBlendMode();
-
-	BeginMode2D(mCamera);
-
 	BeginBlendMode(BLEND_ADDITIVE);
-	Color gridColor = ColorAlpha(CyberpunkColors::NEON_PURPLE, 0.15f);
+	Color gridColor = ColorAlpha(Color{ 0,40,50,255 }, 0.25f);
 	float time = (float)GetTime();
 	for (int i = 0; i < 20; ++i)
 	{
 		float y = (screenHeight / 2) + (i * i * 2) + (fmodf(time * 20.0f, 20.0f));
 		if (y < screenHeight) DrawLine(-200, y, screenWidth + 200, y, gridColor);
 	}
-	DrawLine(-200, screenHeight / 2, screenWidth + 200, screenHeight / 2, CyberpunkColors::NEON_PINK);
+	DrawLine(-200, screenHeight / 2, screenWidth + 200, screenHeight / 2, CyberpunkColors::NEON_CYAN);
 	EndBlendMode();
+}
 
-	BeginBlendMode(BLEND_ADDITIVE);
-	for (auto& visual : this->visBars)
+void GraphicsThread::DrawTex()
+{
+	float bass = smoothState.empty() ? 0.0f : smoothState[0];
+	float dt = GetFrameTime();
+	float time = GetTime();
+	float shakeInput = 0.0f;
+
+	if (bass > 0.6f)
 	{
-		draw(visual);
+		float hitStrength = (bass - 0.6f) / 0.3f;
+		shakeInput += hitStrength * 0.3f;
+		if (shakeInput > 1.0f)
+		{
+			shakeInput = 1.0f;
+		}
 	}
 
-	EndBlendMode();
+	shakeInput -= 2.0f * dt;
+	if (shakeInput < 0.0f)
+	{
+		shakeInput = 0.0f;
+	}
 
-	EndMode2D();
-	EndTextureMode();
-
-	BeginDrawing();
-	ClearBackground(BLACK);
-
-	float shakeBase = smoothState.empty() ? 0.0f : smoothState[0] * 3.0f;
-	float shake = fminf(powf(shakeBase, 2.0f) * 10.0f, 10.0f);
+	float shakePower = shakeInput * shakeInput * 15.0f;
+	float shakeX = sinf(time * 50.0f) * shakePower;
+	float shakeY = cosf(time * 40.0f) * (shakePower * 0.5f);
 
 	Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
 	Vector2 origin = { 0, 0 };
 
 	BeginBlendMode(BLEND_ALPHA);
 	DrawTexturePro(target.texture, srcRec,
-		{ shake, 0, (float)screenWidth, (float)screenHeight },
+		{ shakeX, shakeY, (float)screenWidth, (float)screenHeight },
 		origin, 0.0f, WHITE);
 	EndBlendMode();
+}
 
+void GraphicsThread::Draw()
+{
+	// clear and reserve memory for visual bars before drawing
+	visBars.clear();
+	visBars.reserve(BUCKET_COUNT * 2);
+	this->prepareVisuals();
+
+	float bass = smoothState.empty() ? 0.0f : smoothState[0];
+	if (std::isnan(bass)) bass = 0.0f;
+	if (bass < 0.0f) bass = 0.0f;
+	if (bass > 1.0f) bass = 1.0f;
+	static float intensity = 0.0f;
+
+	float dt = GetFrameTime();
+
+	if (bass > 0.6f)
+	{
+		intensity += (bass - 0.6f) * 0.05f;
+	}
+
+	intensity -= 2.0f * dt;
+
+	if (intensity < 0.0f)
+	{
+		intensity = 0.0f;
+	}
+	if (intensity > 1.0f)
+	{
+		intensity = 1.0f;
+	}
+
+	float targetZoom = 1.0f + (intensity * 0.12f);
+
+	float attackSpeed = fminf(4.0f * dt, 1.0f);
+	float decaySpeed = fminf(0.5f * dt, 1.0f);
+
+	if (targetZoom > mCamera.zoom)
+	{
+		mCamera.zoom = Lerp(mCamera.zoom, targetZoom, attackSpeed);
+	}
+	else
+	{
+		mCamera.zoom = Lerp(mCamera.zoom, targetZoom, decaySpeed);
+	}
+
+	if (mCamera.zoom < 0.5f)
+	{
+		mCamera.zoom = 0.5f;
+	}
+	if (mCamera.zoom > 1.2f)
+	{
+		mCamera.zoom = 1.2f;
+	}
+
+	float maxAngle = 1.0f + (intensity * 4.0f);
+	mCamera.rotation = sinf((float)GetTime() * 1.0f) * maxAngle;
+
+	BeginTextureMode(target);
+	BeginBlendMode(BLEND_ALPHA);
+	DrawRectangle(0, 0, target.texture.width, target.texture.height, Color{ 0,0,0,70});
+	EndBlendMode();
+
+	BeginMode2D(mCamera);
+
+	if (intensity > 0.6f)
+	{
+		BeginBlendMode(BLEND_ADDITIVE);
+		Color centerCol = ColorAlpha(CyberpunkColors::NEON_ORANGE, intensity * 0.2f);
+		Color edgeCol = ColorAlpha(BLACK, 0.0f);
+		
+		DrawCircleGradient(screenWidth / 2, screenHeight / 2, screenWidth * 0.8f,centerCol,edgeCol);
+		
+		
+		EndBlendMode();
+	}
+
+	DrawGridLines();
+
+	BeginBlendMode(BLEND_ADDITIVE);
+	for (auto& visual : this->visBars)
+	{
+		draw(visual);
+	}
+	EndBlendMode();
+	EndMode2D();
+
+	EndTextureMode();
+
+	BeginDrawing();
+	ClearBackground(Color{ 2, 2, 10, 255 });
+	DrawTex();
 
 	BeginBlendMode(BLEND_MULTIPLIED);
-	float vigRadius = screenWidth * (1.3f - (bassShock * 0.1f));
+	float vigRadius = screenWidth * (1.3f - (intensity * 0.2f));
 	DrawCircleGradient(screenWidth / 2, screenHeight / 2, vigRadius, WHITE, Color{ 80, 80, 80, 255 });
 	EndBlendMode();
 

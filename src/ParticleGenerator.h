@@ -5,10 +5,13 @@
 #include <vector>
 
 namespace CyberpunkColors {
-	const Color NEON_CYAN = { 0, 243, 255, 255 };   // TRON Blue
+	const Color DARK_GRAY = { 20,40,50,255 };
+	const Color NEON_CYAN = { 0,220,255,255 };  // TRON Blue
 	const Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
 	const Color NEON_GREEN = { 0, 255, 65, 255 };    // Matrix Green
 	const Color NEON_PURPLE = { 180, 0, 255, 255 };   // Deep Neon
+	const Color DARK_CYAN = { 0, 15, 20, 255 };
+	const Color NEON_ORANGE = { 255, 60, 0, 255 };
 }
 
 struct ParticleGenerator
@@ -39,11 +42,11 @@ struct ParticleGenerator
 			p.pos = { (float)GetRandomValue(0,w),(float)GetRandomValue(0,h) };
 			p.velocity.x = (float)GetRandomValue(-20, 20);
 			p.velocity.y = (float)GetRandomValue(-20, 20);
-			p.size = (float)GetRandomValue(2, 5);
+			p.size = (float)GetRandomValue(2, 4);
 
 
 			if (GetRandomValue(0, 1) == 0) p.baseColor = CyberpunkColors::NEON_CYAN;
-			else						   p.baseColor = CyberpunkColors::NEON_PINK;
+			else						   p.baseColor = WHITE;
 
 
 			p.alphaOffset = (float)GetRandomValue(0, 100) / 10.0f;
@@ -63,6 +66,8 @@ struct ParticleGenerator
 		float dt = GetFrameTime();
 
 		float speedMult = 1.0f + (bassShock * 20.0f);
+
+		Color dropColor = { 255,200,0,255 };
 
 		for (auto& p : particles)
 		{
@@ -86,19 +91,25 @@ struct ParticleGenerator
 			if (p.pos.y > h_ + 20) p.pos.y = -20;
 
 
-			float pulseSize = p.size * (1.0f + (bassShock * 2.0f));
-			float alpha = 0.1f + (trebleShock * 0.4f);
+			float pulseSize = p.size * (1.0f + (bassShock * 3.0f));
+			float alpha = 0.3f + (trebleShock * 0.7f);
 
 			p.alphaOffset = alpha;
 			p.pulseSize = pulseSize;
+			p.baseColor = ColorLerp(p.baseColor, dropColor, bassShock);
 		}
 	}
 
 	void operator()() const
 	{
 		for (auto& p : particles) {
-			Color c = ColorAlpha(p.baseColor, p.alphaOffset);
-			DrawRectangleRec({ p.pos.x - p.pulseSize / 2, p.pos.y - p.pulseSize / 2, p.pulseSize, p.pulseSize }, c);
+			Color finalCol = ColorAlpha(p.baseColor, p.alphaOffset);
+			float coreSize = p.pulseSize * 0.5f;
+			Vector2 corePos = { p.pos.x + coreSize * 0.5f,p.pos.y + coreSize * 0.5f };
+			DrawRectangleV(corePos, { coreSize, coreSize }, ColorAlpha(WHITE, p.alphaOffset));
+
+			//Color c = ColorAlpha(p.baseColor, p.alphaOffset);
+			//DrawRectangleRec({ p.pos.x - p.pulseSize / 2, p.pos.y - p.pulseSize / 2, p.pulseSize, p.pulseSize }, c);
 		}
 	}
 

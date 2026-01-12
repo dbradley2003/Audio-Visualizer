@@ -29,7 +29,6 @@ template<typename T>
 class TripleBuffer
 {
 public:
-	static constexpr int FFT_SIZE = 512;
 	TripleBuffer(int size)
 		:
 		mtx(),

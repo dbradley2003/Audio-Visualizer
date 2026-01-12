@@ -13,17 +13,13 @@
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "winmm.lib")
 
-
-
 std::atomic<bool> doneFlag(false);
-
-using namespace Constants;
 
 int main()
 {
-	std::string filePath = "demos/audio4.wav";
+	std::string filePath = "demos/audio7.wav";
 
-	TripleBuffer<std::vector<float>> tripleBuffer(BIN_COUNT);
+	TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
 	RingBuffer ringBuffer = RingBuffer();

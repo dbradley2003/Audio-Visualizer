@@ -23,12 +23,18 @@ public:
 	~GraphicsThread();
 
 	void Initialize();
+	void Update();
+	
+	
+private:
+	void prepareVisuals();
+	void fftProcess();
 	void Draw();
 	bool Swap();
-	void Update();
-	void fftProcess();
-	void prepareVisuals();
-private:
+
+	void DrawGridLines();
+	void DrawTex();
+
 	// Audio Data
 	std::unique_ptr<std::vector<float>> readBuffer;
 	std::vector<float> smoothState;
