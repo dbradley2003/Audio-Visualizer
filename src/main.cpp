@@ -1,11 +1,8 @@
-#include <iostream>
-
 #include "RingBuffer.h"
 #include "AudioEngine.h"
 #include "AnalyzerThread.h"
 #include "GraphicsThread.h"
 #include "TripleBuffer.h"
-#include "raylib.h"
 
 #include "constants.h"
 
@@ -17,7 +14,7 @@ std::atomic<bool> doneFlag(false);
 
 int main()
 {
-	std::string filePath = "demos/audio11.wav";
+	std::string filePath = "demos/audio3.wav";
 
 	TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
 
@@ -41,7 +38,7 @@ int main()
 	}
 	audioObj.Start();
 
-	GraphicsThread visualizer{ 1280,720, tripleBuffer };
+	GraphicsThread visualizer{ 1920,1280, tripleBuffer };
 	visualizer.Initialize(); // initialize window and constants
 
 	while (!WindowShouldClose())

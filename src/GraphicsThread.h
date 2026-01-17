@@ -33,7 +33,8 @@ private:
 	bool Swap();
 
 	void DrawGridLines();
-	void DrawTex();
+	void DrawVisualBars();
+	void ScreenShake();
 
 	// Audio Data
 	std::unique_ptr<std::vector<float>> readBuffer;

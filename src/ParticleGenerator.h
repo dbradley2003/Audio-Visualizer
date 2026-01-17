@@ -1,120 +1,130 @@
 #ifndef PARTICLE_GENERATOR_H
 #define PARTICLE_GENERATOR_H
 
-#include "raylib.h"
-#include <vector>
+#include "constants.h"
+#include "Particle.h"
 
-namespace CyberpunkColors {
-	const Color DARK_GRAY = { 20,40,50,255 };
-	const Color NEON_CYAN = { 0,220,255,255 };  // TRON Blue
-	const Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
-	const Color NEON_GREEN = { 0, 255, 65, 255 };    // Matrix Green
-	const Color NEON_PURPLE = { 180, 0, 255, 255 };   // Deep Neon
-	const Color DARK_CYAN = { 0, 15, 20, 255 };
-	const Color NEON_ORANGE = { 255, 60, 0, 255 };
-}
+using namespace CyberpunkColors;
+using namespace Constants;
 
 struct ParticleGenerator
 {
-	struct Particle
-	{
-		Vector2 pos;
-		Vector2 velocity;
-		float size;
-		float alphaOffset;
-		float pulseSize;
-		Color baseColor;
-	};
-
 	mutable std::vector<Particle> particles;
-
 	ParticleGenerator(const ParticleGenerator&) = delete;
-	ParticleGenerator()
-		:h_(0),
-		w_(0)
-	{ }
+	ParticleGenerator() = default;
 
-	void Init(int count, int w, int h)
+	void Init()
 	{
-		particles.resize(count);
-		for (auto& p : particles)
+		width = GetScreenWidth();
+		height = GetScreenHeight();
+
+		particles.clear();
+		particles.reserve(PARTICLE_COUNT);
+
+		
+		
+		for (int i{}; i < PARTICLE_COUNT; ++i)
 		{
-			p.pos = { (float)GetRandomValue(0,w),(float)GetRandomValue(0,h) };
-			p.velocity.x = (float)GetRandomValue(-20, 20);
-			p.velocity.y = (float)GetRandomValue(-20, 20);
-			p.size = (float)GetRandomValue(2, 4);
+			Particle p{};
+			bool isBackground = GetRandomValue(0, 100) < 80;
+			
+			if (isBackground)
+			{
+				p.size = (float)GetRandomValue(1, 2) * 0.3f;
+				p.velocity.x = (float)GetRandomValue(-20, 20);
+				p.velocity.y = (float)GetRandomValue(-20, 20);
+				p.alphaOffset = 0.25f;
+			}
+			else
+			{
+				p.size = (float)GetRandomValue(2,4) * 0.3f;
+				p.velocity.x = (float)GetRandomValue(-200, 200);
+				p.velocity.y = (float)GetRandomValue(-200, 200);
+				p.alphaOffset = 1.0f;
+			}
 
+			p.pos = { (float)GetRandomValue(0,width),(float)GetRandomValue(0,height) };
+			p.id = (float)i;
+			p.baseColor = P_NEON_CYAN;
 
-			if (GetRandomValue(0, 1) == 0) p.baseColor = CyberpunkColors::NEON_CYAN;
-			else						   p.baseColor = WHITE;
-
-
-			p.alphaOffset = (float)GetRandomValue(0, 100) / 10.0f;
+			particles.push_back(p);
 		}
-		this->h_ = h;
-		this->w_ = w;
 	}
 
 	void update(float rawBass, float rawTreble)
 	{
-		float bass = std::min(rawBass, 1.0f);
-		float treble = std::min(rawTreble, 1.0f);
+		// Constants
+		const float dt = GetFrameTime();
+		const float maxSpeed = 200.0f;
+		const float border = 50.0f;
+		const float widthLimit = (float)width + border;
+		const float heightLimit = (float)height + border;
 
-		float bassShock = powf(bass, 3.0f);
-		float trebleShock = powf(treble, 2.0f);
+		float bass = std::clamp(rawBass,0.0f, 1.0f);
+		float treble = std::clamp(rawTreble,0.0f, 1.0f);
+		
+		float bassShock = bass * bass * bass;
+		float trebleShock = treble * treble;
 
-		float dt = GetFrameTime();
-
-		float speedMult = 1.0f + (bassShock * 20.0f);
-
-		Color dropColor = { 255,200,0,255 };
+		float globalSpeed = 1.0f + (bassShock * 10.0f);
+		float globalPulse = 1.0f + (bassShock * 5.5f);
 
 		for (auto& p : particles)
 		{
-			float moveX = p.velocity.x * speedMult;
-			float moveY = p.velocity.y * speedMult;
+			float depthFactor = (p.size / 4.0f);
+			float depthSpeed = globalSpeed * (0.5f + depthFactor);
 
-			float maxSpeed = 350.0f;
+			float driftX = FastSin(p.id * 1.7f + (float)GetTime()) * 40.0f;
+			float driftY = FastSin(p.id * 2.3f + (float)GetTime() + 2.0f) * 40.0f;
 
-			if (moveX > maxSpeed) moveX = maxSpeed;
-			if (moveX < -maxSpeed) moveX = -maxSpeed;
-			if (moveY > maxSpeed) moveY = maxSpeed;
-			if (moveY < -maxSpeed) moveY = -maxSpeed;
+			float rawMoveX = (p.velocity.x + driftX) * depthSpeed;
+			float rawMoveY = (p.velocity.y + driftY) * depthSpeed;
 
-			p.pos.x += moveX * dt;
-			p.pos.y += moveY * dt;
+			p.pos.x += std::clamp(rawMoveX, -maxSpeed, maxSpeed) * dt;
+			p.pos.y += std::clamp(rawMoveY, -maxSpeed, maxSpeed) * dt;
 
-			if (p.pos.x < -20) p.pos.x = (float)w_ + 20;
-			if (p.pos.x > w_) p.pos.x = -20;
+			if (p.pos.x < -border) p.pos.x = widthLimit;
+			else if (p.pos.x > widthLimit) p.pos.x = -border;
 
-			if (p.pos.y < -20) p.pos.y = (float)h_ + 20;
-			if (p.pos.y > h_ + 20) p.pos.y = -20;
+			if (p.pos.y < -border) p.pos.y = heightLimit;
+			else if (p.pos.y > heightLimit) p.pos.y = -border;
 
+			p.pulseSize = p.size * globalPulse;
 
-			float pulseSize = p.size * (1.0f + (bassShock * 3.0f));
-			float alpha = 0.3f + (trebleShock * 0.7f);
+			float wave = FastSin((float)GetTime() * 3.0f + p.id * 0.5f);
+			float rawEnergy = bassShock + (wave * 0.15f);
+			const float energy = std::clamp(rawEnergy, 0.0f, 1.0f);
 
-			p.alphaOffset = alpha;
-			p.pulseSize = pulseSize;
-			p.baseColor = ColorLerp(p.baseColor, dropColor, bassShock);
+			if (energy < 0.5f) p.baseColor = ColorLerp(P_DEEP_VOID, P_NEON_CYAN, energy * 2.0f);
+			else p.baseColor = ColorLerp(P_NEON_CYAN, P_HYPER_HOT, (energy - 0.5f) * 2.0f);
+
+			p.alphaOffset = 0.2f + (trebleShock * 0.8f);
 		}
 	}
 
-	void operator()() const
+	void Draw() const
 	{
-		for (auto& p : particles) {
-			Color finalCol = ColorAlpha(p.baseColor, p.alphaOffset);
-			float coreSize = p.pulseSize * 0.5f;
-			Vector2 corePos = { p.pos.x + coreSize * 0.5f,p.pos.y + coreSize * 0.5f };
-			DrawRectangleV(corePos, { coreSize, coreSize }, ColorAlpha(WHITE, p.alphaOffset));
+		BeginBlendMode(BLEND_ADDITIVE);
+		for (const auto& p : particles) {
+			if (p.alphaOffset <= 0.01f) continue;
 
-			//Color c = ColorAlpha(p.baseColor, p.alphaOffset);
-			//DrawRectangleRec({ p.pos.x - p.pulseSize / 2, p.pos.y - p.pulseSize / 2, p.pulseSize, p.pulseSize }, c);
+			float coreSize = p.pulseSize * 0.5f;
+
+			Vector2 corePos = {
+				p.pos.x + p.pulseSize * 0.35f,
+				p.pos.y + p.pulseSize * 0.35f
+			};
+
+			/*DrawCircleGradient((int)corePos.x, (int)corePos.y, coreSize * 2.0f, ColorAlpha(p.baseColor, p.alphaOffset),
+				ColorAlpha(BLACK, 0.0f));*/
+
+			DrawRectangleV(corePos, { coreSize, coreSize }, ColorAlpha(p.baseColor, p.alphaOffset));
 		}
+		EndBlendMode();
 	}
 
-	int w_;
-	int h_;
+	int width{ 0 };
+	int height{ 0 };
 };
 
 #endif

@@ -1,6 +1,15 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#include "raylib.h"
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <iostream>
+
+constexpr double pi = 3.14159265358979323846;
+constexpr int TABLE_SIZE = 2048;
+
 namespace Constants
 {
 	static constexpr int FFT_SIZE = 4096;
@@ -12,6 +21,68 @@ namespace Constants
 
 	static constexpr float SMOOTHNESS = 30.0f;
 	static constexpr float SMEAREDNESS = 5.0f;
+
+	static constexpr int PARTICLE_COUNT = 2000;
+}
+
+namespace CyberpunkColors {
+	const Color DARK_GRAY = { 20,40,50,255 };
+	const Color NEON_CYAN = { 0,220,255,255 };  // TRON Blue
+	const Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
+	const Color NEON_GREEN = { 0, 255, 65, 255 };    // Matrix Green
+	const Color NEON_PURPLE = { 180, 0, 255, 255 };   // Deep Neon
+	const Color DARK_CYAN = { 0, 15, 20, 255 };
+	const Color NEON_ORANGE = { 255, 60, 0, 255 };
+	const Color ICE_BLUE = { 180,255,255,255 };
+	const Color P_DEEP_VOID = { 20, 0, 40, 255 };   
+	const Color P_NEON_CYAN = { 0, 240, 255, 255 }; 
+	const Color P_HYPER_HOT = { 255, 255, 200, 255 };
+	const Color GRID_COLOR = ColorAlpha(Color{ 0,100,120,255 }, 0.3f);
+}
+
+constexpr double const_sin(double x)
+{
+	while (x > pi) x -= 2 * pi;
+
+	while (x < -pi) x += 2 * pi;
+
+	double res = x;
+	double term = x;
+	double x2 = x * x;
+
+	term *= -x2 / (2 * 3);    res += term;
+	term *= -x2 / (4 * 5);    res += term;
+	term *= -x2 / (6 * 7);    res += term;
+	term *= -x2 / (8 * 9);    res += term;
+	term *= -x2 / (10 * 11);  res += term;
+
+	return res;
+}
+
+constexpr std::array<float, TABLE_SIZE> GenerateSineTable()
+{
+	std::array<float, TABLE_SIZE> table{};
+	for (int i{}; i < TABLE_SIZE; ++i)
+	{
+		double angle = (static_cast<double>(i) / TABLE_SIZE) * 2.0 * pi;
+		table[i] = static_cast<float>(const_sin(angle));
+	}
+	return table;
+}
+
+static constexpr auto SINE_TABLE = GenerateSineTable();
+
+inline float FastSin(float angle)
+{
+	float norm = angle / (2.0f * (float)pi);
+	norm = norm - (long)norm;
+	if (norm < 0) norm += 1.0f;
+
+	int index = static_cast<int>(norm * TABLE_SIZE);
+
+	index = index >= TABLE_SIZE ? TABLE_SIZE - 1 : index;
+
+	return SINE_TABLE[index];
 }
 
 #endif

@@ -35,8 +35,6 @@ namespace detail
 
 		void clone(Concept* memory) const override
 		{
-			//return std::make_unique<OwningModel>(*this);
-
 			auto* ptr =
 				const_cast<void*>(static_cast<void const volatile*>(memory));
 			::new(ptr) OwningModel(*this);
@@ -70,8 +68,6 @@ public:
 		static_assert(sizeof(Model) <= Size, "Given type is too large");
 		static_assert(alignof(Model) <= Alignment, "Given type is misaligned");
 		
-		//std::cout << "Size of Drawable: " << sizeof(Model) << "Align of Drawable: " << alignof(Model) << std::endl;
-
 		auto* ptr =
 			const_cast<void*>(static_cast<void const volatile*>(pimpl()));
 		::new(ptr) Model(std::move(drawable),std::move(drawer));

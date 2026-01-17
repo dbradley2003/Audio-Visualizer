@@ -206,6 +206,7 @@
     <ClInclude Include="src\Bar.h" />
     <ClInclude Include="src\constants.h" />
     <ClInclude Include="src\Drawable.h" />
+    <ClInclude Include="src\Particle.h" />
     <ClInclude Include="src\ParticleGenerator.h" />
     <ClInclude Include="src\TripleBuffer.h" />
     <ClInclude Include="include\dj_fft.h" />
