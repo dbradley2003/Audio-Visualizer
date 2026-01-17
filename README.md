@@ -16,5 +16,7 @@ a locked 60 FPS.
 ## Video Examples
 
 * **[Demo 1](https://youtu.be/mTJd4j_Y69w)**
+
 * **[Demo 2](https://youtu.be/GUeI9zm9KNQ)**
+
 * **[Demo 3](https://youtu.be/hQZe7EF5zdE)**
