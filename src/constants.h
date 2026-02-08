@@ -12,26 +12,33 @@ namespace Constants
 	static constexpr int FFT_SIZE = 4096;
 	static constexpr int BIN_COUNT = FFT_SIZE / 2;
 	static constexpr int HOP_SIZE = 512;
-	static constexpr int BUCKET_COUNT = 64;
-	static constexpr int BAR_SPACING = 1;
-	static constexpr float SMOOTHNESS = 15.0f;
-	static constexpr float SMEAREDNESS = 5.0f;
+	static constexpr int BUCKET_COUNT = 128;
+	static constexpr float BAR_SPACING = 2.0f;
+	static constexpr float SMOOTHNESS = 10.0f;
+	static constexpr float SMEAREDNESS = 3.0f;
 	static constexpr int PARTICLE_COUNT = 1000;
+	static constexpr float TREBLE_MULTIPLIER = 3.0f;
 }
 
 namespace CyberpunkColors {
-	const Color DARK_GRAY = { 20,40,50,255 };
-	const Color NEON_CYAN = { 0,220,255,255 };  // TRON Blue
-	const Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
-	const Color NEON_GREEN = { 0, 255, 65, 255 };    // Matrix Green
-	const Color NEON_PURPLE = { 180, 0, 255, 255 };   // Deep Neon
-	const Color DARK_CYAN = { 0, 15, 20, 255 };
-	const Color NEON_ORANGE = { 255, 60, 0, 255 };
-	const Color ICE_BLUE = { 180,255,255,255 };
-	const Color P_DEEP_VOID = { 20, 0, 40, 255 };   
-	const Color P_NEON_CYAN = { 0, 240, 255, 255 }; 
-	const Color P_HYPER_HOT = { 255, 255, 200, 255 };
+	static constexpr Color DARK_GRAY = { 20,40,50,255 };
+	static constexpr Color NEON_CYAN = { 0,220,255,255 };  // TRON Blue
+	static constexpr Color NEON_PINK = { 255, 0, 175, 255 };   // Hotline Miami Pink
+	static constexpr Color NEON_GREEN = { 0, 255, 65, 255 };    // Matrix Green
+	static constexpr Color NEON_PURPLE = { 180, 0, 255, 255 };   // Deep Neon
+	static constexpr Color DARK_CYAN = { 0, 15, 20, 255 };
+	static constexpr Color NEON_ORANGE = { 255, 60, 0, 255 };
+	static constexpr Color ICE_BLUE = { 180,255,255,255 };
+	static constexpr Color P_DEEP_VOID = { 20, 0, 40, 255 };
+	static constexpr Color P_NEON_CYAN = { 0, 240, 255, 255 };
+	static constexpr Color P_HYPER_HOT = { 255, 255, 200, 255 };
 	const Color GRID_COLOR = ColorAlpha(Color{ 0,100,120,255 }, 0.3f);
+
+	static constexpr Color GHOST_BASE = { 0,220,255,255 };
+	static constexpr Color GHOST_DROP = { 255,60,0,255 };
+	static constexpr Color DROP_TOP = {40, 0, 0, 255};
+	static constexpr Color DROP_BOTTOM = {255, 60, 0, 255};
+
 }
 
 constexpr double const_sin(double x)
@@ -56,7 +63,7 @@ constexpr std::array<float, TABLE_SIZE> GenerateSineTable()
 	std::array<float, TABLE_SIZE> table{};
 	for (int i{}; i < TABLE_SIZE; ++i)
 	{
-		double angle = (static_cast<double>(i) / TABLE_SIZE) * 2.0 * pi;
+		const double angle = (static_cast<double>(i) / TABLE_SIZE) * 2.0 * pi;
 		table[i] = static_cast<float>(const_sin(angle));
 	}
 	return table;

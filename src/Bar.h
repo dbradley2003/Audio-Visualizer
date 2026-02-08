@@ -6,7 +6,7 @@ class Bar
 {
 public:
 
-	Bar(int height, int width, int xLeft,int xRight, int y)
+	Bar(const int height, const int width, const int xLeft, const int xRight, const int y)
 		:
 		height_(height),
 		width_(width),
@@ -16,27 +16,27 @@ public:
 	{
 	}
 
-	int height() const
+	[[nodiscard]] int height() const
 	{
 		return height_;
 	}
 
-	int width() const
+	[[nodiscard]] int width() const
 	{
 		return width_;
 	}
 
-	int xLeft() const
+	[[nodiscard]] int xLeft() const
 	{
 		return xLeft_;
 	}
 
-	int xRight() const
+	[[nodiscard]] int xRight() const
 	{
 		return xRight_;
 	}
 
-	int y() const
+	[[nodiscard]] int y() const
 	{
 		return y_;
 	}

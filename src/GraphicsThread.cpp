@@ -1,396 +1,443 @@
 #include "GraphicsThread.h"
 
-#include <cmath>
-
+#include "Bar.h"
 #include "raylib.h"
 #include "raymath.h"
-#include "Bar.h"
+#include <sys/stat.h>
 
-#pragma warning(disable: 4244)
+#pragma warning(disable : 4244)
 
 using namespace std;
 using namespace CyberpunkColors;
 
-namespace
+namespace {
+class GhostDrawer {
+public:
+  explicit GhostDrawer(const Color baseColor)
+      : mColTop(ColorAlpha(baseColor, 0.3f)),
+        mColBot(ColorAlpha(baseColor, 0.0f)),
+        mShadowCol(ColorAlpha(BLACK, 0.5f)) {}
+
+  void operator()(const Bar &bar) const {
+    if (bar.height() <= 2) {
+      return;
+    }
+
+    const int w = bar.width();
+    const int h = bar.height();
+
+    DrawRectangle(bar.xRight(), bar.y(), w, h, mShadowCol);
+    DrawRectangle(bar.xLeft(), bar.y(), w, h, mShadowCol);
+    DrawRectangleGradientV(bar.xRight(), bar.y(), w, bar.height(), mColTop,
+                           mColBot);
+    DrawRectangleGradientV(bar.xLeft(), bar.y(), w, h, mColTop, mColBot);
+  };
+
+private:
+  Color mColTop;
+  Color mColBot;
+  Color mShadowCol;
+};
+
+class SolidDrawer {
+public:
+  explicit SolidDrawer(const Color topColor, const Color bottomColor)
+      : mTopColor(topColor), mBottomColor(bottomColor),
+        mGlowColor(ColorAlpha(topColor, 0.6f)),
+        mCapColor(ColorAlpha(WHITE, 0.95f)) {}
+
+  void operator()(const Bar &bar) const {
+    if (bar.height() < 1)
+      return;
+
+    const int w = bar.width();
+    const int h = bar.height();
+
+    DrawRectangleGradientV(bar.xRight(), bar.y(), w, h, mTopColor,
+                           mBottomColor);
+    DrawRectangleGradientV(bar.xLeft(), bar.y(), w, h, mTopColor, mBottomColor);
+
+    DrawRectangle(bar.xLeft(), bar.y() - 2, w, 4, mGlowColor);
+    DrawRectangle(bar.xRight(), bar.y() - 2, w, 4, mGlowColor);
+
+    DrawRectangle(bar.xLeft(), bar.y(), w, 2, mCapColor);
+    DrawRectangle(bar.xRight(), bar.y(), w, 2, mCapColor);
+  };
+
+private:
+  Color mTopColor;
+  Color mBottomColor;
+  Color mGlowColor;
+  Color mCapColor;
+};
+} // namespace
+
+GraphicsThread::GraphicsThread(const int screenHeight, const int screenWidth,
+                               TripleBuffer<std::vector<float>> &sharedBuffer)
+    : screenHeight(screenHeight), screenWidth(screenWidth),
+      share_ag(sharedBuffer), smoothState(BUCKET_COUNT, 0.0f),
+      smearedState(BUCKET_COUNT, 0.0f), colorLUT(), target(), mCamera()
+
 {
-	class GhostDrawer {
-	public:
-		GhostDrawer(Color mColor_)
-			:mColor(mColor_)
-		{
-		}
-		void operator()(const Bar& bar)
-		{
-			if (bar.height() <= 2) return;
-
-			Color colTop = ColorAlpha(mColor, 0.05f);
-			Color colBot = ColorAlpha(mColor, 0.3f);
-
-			DrawRectangle(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), ColorAlpha(BLACK, 0.5f));
-			DrawRectangle(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), ColorAlpha(BLACK, 0.5f));
-
-			DrawRectangleGradientV(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), colTop, colBot);
-			DrawRectangleGradientV(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), colTop, colBot);
-
-		};
-	private:
-		Color mColor;
-	};
-
-	class SolidDrawer {
-	public:
-		SolidDrawer(Color topColor_, Color bottomColor_)
-			:
-			topColor(topColor_),
-			bottomColor(bottomColor_)
-		{
-		}
-
-		void operator()(const Bar& bar)
-		{
-			if (bar.height() < 1.0f) return;
-
-			DrawRectangleGradientV(bar.xRight(), bar.y(), (int)bar.width(), bar.height(), topColor, bottomColor);
-			DrawRectangleGradientV(bar.xLeft(), bar.y(), (int)bar.width(), bar.height(), topColor, bottomColor);
-
-			Color glow = ColorAlpha(topColor, 0.5f);
-
-			DrawRectangle(bar.xLeft(), bar.y() - 2, bar.width(), 4, glow);
-			DrawRectangle(bar.xRight(), bar.y() - 2, bar.width(), 4, glow);
-
-			DrawRectangle(bar.xLeft(), bar.y(), bar.width(), 2, ColorAlpha(WHITE, 0.9f));
-			DrawRectangle(bar.xRight(), bar.y(), bar.width(), 2, ColorAlpha(WHITE, 0.9f));
-
-		};
-	private:
-		Color topColor;
-		Color bottomColor;
-	};
+  visBars.reserve(BUCKET_COUNT * 2);
 }
 
-GraphicsThread::GraphicsThread(int screenWidth_, int screenHeight_, TripleBuffer<std::vector<float>>& share_ag_)
-	:
-	screenWidth(screenWidth_),
-	screenHeight(screenHeight_),
-	share_ag(share_ag_),
-	smoothState(BUCKET_COUNT, 0.0f),
-	smearedState(BUCKET_COUNT, 0.0f),
-	mTargetZoom(1.0f)
-{
-	visBars.reserve(BUCKET_COUNT * 2);
+void GraphicsThread::PrecomputeGradient() {
+  for (int i = 0; i < 256; ++i) {
+    const float t = i / 255.0f;
+    if (t < 0.8f) {
+      colorLUT[i] = ColorLerp(BLACK, NEON_CYAN, t * 1.25f);
+    } else {
+      const float rangeT = (t - 0.8f) * 5.0f;
+      Color base = ColorLerp(NEON_CYAN, ICE_BLUE, rangeT);
+
+      if (t > 0.9f) {
+        const float whiteT = (t - 0.9f) * 10.0f;
+        base = ColorLerp(base, WHITE, whiteT);
+      }
+      colorLUT[i] = base;
+    }
+  }
 }
 
-void GraphicsThread::Initialize()
-{
-	SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
-	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
+void GraphicsThread::Initialize() {
 
-	Vector2 scale = GetWindowScaleDPI();
-	this->target = LoadRenderTexture(screenWidth * scale.x, screenHeight * scale.y);
-	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
+  SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
+  InitWindow(screenWidth, screenHeight, "Audio Visualizer");
 
-	// this->target = LoadRenderTexture(screenWidth, screenHeight);
-	// SetTextureWrap(target.texture, TEXTURE_WRAP_CLAMP);
+  const auto scaledH = static_cast<float>(screenHeight);
+  const auto scaledW = static_cast<float>(screenWidth);
 
+  target = LoadRenderTexture(screenWidth, screenHeight);
+  SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
-	this->halfWidth = (float)screenWidth / 2.0f;
-	float availableWidth = halfWidth - (BAR_SPACING * BUCKET_COUNT);
-	this->barWidth = std::max(std::floor(availableWidth / (float)BUCKET_COUNT), 1.0f);
-	this->readBuffer = share_ag.consumerReadBuffer();
+  readBuffer = share_ag.consumerReadBuffer();
+  particleGenerator.Init();
 
-	mCamera.zoom = 1.0f;
-	mCamera.target = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
-	mCamera.offset = { (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
-	mCamera.rotation = 0.0f;
+  const float halfH = scaledH * 0.5f;
+  const float halfW = scaledW * 0.5f;
+  const float availableW = halfW - (BAR_SPACING * BUCKET_COUNT);
+  halfWidth = halfW;
+  barWidth = std::max(std::floor(availableW / BUCKET_COUNT), 1.0f);
 
-	particleGenerator.Init();
+  mCamera = {{halfW, halfH}, {halfW, halfH}, 0.0f, 1.0f};
+  this->PrecomputeGradient(); // Initialize Color Gradient LUT
 }
 
-bool GraphicsThread::Swap()
-{
-	return share_ag.swapConsumer(this->readBuffer);
+bool GraphicsThread::Swap() { return share_ag.swapConsumer(this->readBuffer); }
+
+void GraphicsThread::Update() {
+
+  // Recycle used buffer and get fresh audio data
+  this->Swap();
+
+  if (!this->readBuffer || this->readBuffer->empty()) {
+    return;
+  }
+  this->fftProcess();
 }
 
-void GraphicsThread::Update()
-{
-	this->Swap();
-	if (!this->readBuffer || (*this->readBuffer).empty()) {
-		return;
-	}
+void GraphicsThread::fftProcess() {
+  const auto NUM_BINS = static_cast<float>(this->readBuffer->size()) * 0.5f;
 
-	this->fftProcess();
+  for (int bar = 0; bar < BUCKET_COUNT; ++bar) {
+    const auto barFloat = static_cast<float>(bar);
+
+    const float tStart = barFloat / BUCKET_COUNT;
+    const float tEnd = (barFloat + 1.0f) / BUCKET_COUNT;
+
+    int fStart = static_cast<int>(powf(tStart, 2.5f) * NUM_BINS);
+    int fEnd = static_cast<int>(powf(tEnd, 2.5f) * NUM_BINS);
+
+    if (fStart < 2)
+      fStart = 2;
+    if (fEnd <= fStart)
+      fEnd = fStart + 1;
+    if (fEnd > static_cast<int>(NUM_BINS))
+      fEnd = static_cast<int>(NUM_BINS);
+
+    float sum = 0.0f;
+    int count = 0;
+
+    for (int q = fStart; q < fEnd; ++q) {
+      sum += (*readBuffer)[q];
+      count++;
+    }
+    const float dt = GetFrameTime();
+    const float val = (count > 0) ? sum / static_cast<float>(count) : 0.0f;
+
+    smoothState[bar] += (val - smoothState[bar]) * SMOOTHNESS * dt;
+    smearedState[bar] +=
+        (smoothState[bar] - smearedState[bar]) * SMEAREDNESS * dt;
+  }
 }
 
-void GraphicsThread::fftProcess()
-{
-	int numInputBins = (int)(*this->readBuffer).size() / 2;
-	for (int bar{ 0 }; bar < BUCKET_COUNT; ++bar)
-	{
-		float tStart = (float)bar / (float)BUCKET_COUNT;
-		float tEnd = (float)(bar + 1) / (float)BUCKET_COUNT;
+GraphicsThread::~GraphicsThread() { UnloadRenderTexture(target); }
 
-		int fStart = (int)(powf(tStart, 2.5f) * (float)numInputBins);
-		int fEnd = (int)(powf(tEnd, 2.5f) * (float)numInputBins);
+void GraphicsThread::prepareVisuals() {
+  const int centerY = screenHeight / 2;
+  const auto heightScale = static_cast<float>(this->screenHeight);
 
-		if (fStart < 2) fStart = 2;
-		if (fEnd <= fStart) fEnd = fStart + 1;
-		if (fEnd > numInputBins) fEnd = numInputBins;
+  const int size = static_cast<int>(smoothState.size());
+  const int maxBin = std::min(size, 20);
+  const float bass = smoothState.empty() ? 0.0f : smoothState[0];
 
-		float sum = 0.0f;
-		int count = 0;
+  const float bassShock = bass * bass * bass;
 
-		for (int q = fStart; q < fEnd; ++q)
-		{
-			sum += (*readBuffer)[q];
-			count++;
-		}
+  float treble = 0.0f;
+  if (!smoothState.empty()) {
+    int count = 0;
+    for (int i = 5; i < maxBin; ++i) {
+      treble += smoothState[i];
+      ++count;
+    }
+    if (count > 0) {
+      treble = (treble / static_cast<float>(count)) * TREBLE_MULTIPLIER;
+    }
+  }
 
-		float val = (count > 0) ? (sum / count) : 0.0f;
-		float dt = GetFrameTime();
+  particleGenerator.update(bass, treble);
+  const Color ghostColor = ColorLerp(GHOST_BASE, GHOST_DROP, bassShock);
 
-		smoothState[bar] += (val - smoothState[bar]) * SMOOTHNESS * dt;
-		smearedState[bar] += (smoothState[bar] - smearedState[bar]) * SMEAREDNESS * dt;
-	}
+  visBars.clear();
+  visBars.reserve(BUCKET_COUNT * 2);
+
+  Color targetDropTop = DROP_TOP;
+  float currentOffset = 0.0f;
+  const float stride = barWidth + BAR_SPACING;
+
+  const GhostDrawer ghostDrawer(ColorAlpha(ghostColor, 0.25f));
+
+  if (bassShock > 0.8f) {
+    targetDropTop =
+        ColorLerp(DROP_TOP, {255, 255, 200, 255}, (bassShock - 0.8f) * 5.0f);
+  }
+
+  for (int i = 0; i < BUCKET_COUNT; ++i) {
+    const float smear = smearedState[i];
+    const float smooth = smoothState[i];
+
+    if (smooth <= 0.001f && smear <= 0.001f) {
+      currentOffset += stride;
+      continue;
+    }
+
+    const int colorIndex = static_cast<int>(std::min(smooth, 1.0f) * 255.0f);
+    const Color normalTop = colorLUT[colorIndex];
+    constexpr Color normalBottom = DARK_CYAN;
+
+    const int xRight = static_cast<int>(halfWidth + currentOffset);
+    const int xLeft = static_cast<int>(halfWidth - currentOffset - barWidth);
+
+    const int ghostH = static_cast<int>(smear * heightScale);
+    const int mainH = static_cast<int>(smooth * heightScale);
+
+    const int ghostY = centerY - (ghostH / 2);
+    const int mainY = centerY - (mainH / 2);
+
+    const Color finalTop = ColorLerp(normalTop, targetDropTop, bassShock);
+    const Color finalBot = ColorLerp(normalBottom, DROP_BOTTOM, bassShock);
+
+    auto solidBars = [=](const Bar &bar) {
+      const SolidDrawer sd(finalTop, finalBot);
+      sd(bar);
+    };
+
+    auto reflectionBars = [=](const Bar &bar) {
+      DrawRectangleGradientV(bar.xLeft(), bar.y() + bar.height() + 5,
+                             bar.width(), static_cast<int>(bar.height() * 0.4f),
+                             ColorAlpha(finalBot, 0.15f),
+                             ColorAlpha(BLACK, 0.0f));
+    };
+
+    auto ghostBars = [ghostDrawer](const Bar &bar) { ghostDrawer(bar); };
+
+    if (mainH > 0) {
+      visBars.emplace_back(
+          Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, mainY},
+          solidBars);
+    }
+
+    if (ghostH > 0) {
+      visBars.emplace_back(
+          Bar{ghostH, static_cast<int>(barWidth), xLeft, xRight, ghostY},
+          ghostBars);
+    }
+
+    visBars.emplace_back(
+        Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, ghostY},
+        reflectionBars);
+
+    currentOffset += stride;
+  }
 }
 
-GraphicsThread::~GraphicsThread()
-{
-	UnloadRenderTexture(target);
+void GraphicsThread::DrawGridLines() const {
+  const auto SCALED_HEIGHT = static_cast<float>(this->screenHeight);
+  const auto SCREEN_WIDTH = static_cast<float>(this->screenWidth);
+  const auto SCREEN_WIDTH_EXT = SCREEN_WIDTH + 200.0f;
+  const auto time = static_cast<float>(GetTime());
+
+  const float HORIZON_Y = SCALED_HEIGHT / 2.0f;
+  const float CENTER_X = SCREEN_WIDTH / 2.0f;
+  const float movement = fmodf(time * 100.0f, 100.0f);
+
+  Vector2 horizontalStart = {-200.0f, 0.0f};
+  Vector2 horizontalEnd = {SCREEN_WIDTH_EXT, 0.0f};
+
+  BeginBlendMode(BLEND_ADDITIVE);
+
+  // Drawing Horizontal Lines
+  for (int i = 0; i < 25; ++i) {
+    const auto iFloat = static_cast<float>(i);
+    const float dist = iFloat * iFloat * 2.5f;
+
+    if (dist + HORIZON_Y > SCALED_HEIGHT) {
+      break;
+    }
+
+    const float y = HORIZON_Y + dist + (movement * iFloat * 0.05f);
+
+    horizontalStart.y = y;
+    horizontalEnd.y = y;
+
+    const float fade = std::min(1.0f, iFloat * 2.0f);
+    const float alpha = fade * 0.3f;
+    DrawLineV(horizontalStart, horizontalEnd, ColorAlpha(GRID_COLOR, alpha));
+  }
+
+  const Vector2 verticalStart = {CENTER_X, HORIZON_Y};
+  Vector2 verticalEnd = {0.0f, SCALED_HEIGHT};
+
+  // Drawing Vertical Lines
+  for (int j = -10; j <= 10; ++j) {
+    if (j == 0) {
+      continue;
+    }
+
+    const auto jFloat = static_cast<float>(j);
+    const float x = CENTER_X + (jFloat * SCREEN_WIDTH * 0.15f);
+    verticalEnd.x = x;
+    DrawLineV(verticalStart, verticalEnd, GRID_COLOR);
+  }
+
+  DrawLineV({0, HORIZON_Y}, {SCREEN_WIDTH, HORIZON_Y}, NEON_CYAN);
+  DrawLineV({0, HORIZON_Y + 1.0f}, {SCREEN_WIDTH, HORIZON_Y + 1.0f},
+            ColorAlpha(NEON_CYAN, 0.5f));
+  EndBlendMode();
 }
 
-void GraphicsThread::prepareVisuals()
-{
-	const int centerY = screenHeight / 2;
-	const int size = static_cast<int>(smoothState.size());
-	const int maxBin = std::min(size, 20);
-	const float TREBLE_MULT = 1.5f;
+void GraphicsThread::ScreenShake() {
+  const float dt = GetFrameTime();
 
-	float bass = smoothState.empty() ? 0.0f : smoothState[0];
-	float bassShock = bass * bass * bass;
-	float treble = 0.0f;
+  float bass = 0.0f;
+  const int bassCount = std::min(static_cast<int>(smoothState.size()), 3);
+  for (int i = 0; i < bassCount; ++i) {
+    if (bassCount > 0) {
+      bass /= static_cast<float>(bassCount);
+    }
+  }
 
-	if (!smoothState.empty())
-	{
-		int count = 0;
-		for (int i = 5; i < maxBin; ++i)
-		{
-			treble += smoothState[i];
-			++count;
-		}
-		if (count > 0) treble /= count;
-		treble *= TREBLE_MULT;
-	}
+  constexpr float BASS_THRESHOLD = 0.65f;
+  if (bass > BASS_THRESHOLD) {
+    const float impact = (bass - BASS_THRESHOLD) * 1.5f;
+    mScreenTrauma += impact;
+    if (mScreenTrauma > 1.0f) {
+      mScreenTrauma = 1.0f;
+    }
+  }
+  mScreenTrauma -= 1.2f * dt;
+  if (mScreenTrauma < 0.0f) {
+    mScreenTrauma = 0.0f;
+  }
 
-	particleGenerator.update(bass, treble);
+  const float shake = mScreenTrauma * mScreenTrauma;
+  const float rX = static_cast<float>(GetRandomValue(-100, 100)) / 100.0f;
+  const float rY = static_cast<float>(GetRandomValue(-100, 100)) / 100.0f;
+  const float rRot = static_cast<float>(GetRandomValue(-100, 100)) / 100.0f;
 
-	const Color ghostBase = { 0,220,255,255 };
-	const Color ghostDrop = { 255,60,0,255 };
-	const Color ghostColor = ColorLerp(ghostBase, ghostDrop, bassShock);
+  constexpr float MAX_OFFSET = 30.0f;
+  constexpr float MAX_ANGLE = 2.0f;
 
-	for (int i{ 0 }; i < BUCKET_COUNT; ++i)
-	{
-		float height = smoothState[i] * screenHeight;
+  const float offsetX = MAX_OFFSET * shake * rX;
+  const float offsetY = MAX_OFFSET * shake * rY;
+  const float angle = MAX_ANGLE * shake * rRot;
 
-		int ghostHeight = static_cast<int>(smearedState[i] * screenHeight);
-		int mainHeight = static_cast<int>(smoothState[i] * screenHeight);
-		int x = i * (barWidth + BAR_SPACING);
-		int xRight = static_cast<int>(halfWidth + x);
-		int xLeft = static_cast<int>(halfWidth - x - barWidth);
-		int ghostY = centerY - (ghostHeight / 2);
-		int mainY = centerY - (mainHeight / 2);
+  const float scale = 1.0f + (0.05f * shake);
 
-		Color normalTop = BLACK;
-		Color normalBot = DARK_CYAN;
+  const Rectangle src = {0, 0, static_cast<float>(target.texture.width),
+                         -static_cast<float>(target.texture.height)};
+  const Vector2 center = {static_cast<float>(screenWidth) * 0.5f,
+                          static_cast<float>(screenHeight) * 0.5f};
 
-		if (height < 0.8f)
-		{
-			normalTop = ColorLerp(BLACK, NEON_CYAN, height * 1.25f);
-		}
-		else
-		{
-			float t = (height - 0.8f) * 5.0f;
-			normalTop = ColorLerp(NEON_CYAN, ICE_BLUE, t);
-			if (height > 0.9f) normalTop = ColorLerp(normalTop, WHITE, (height - 0.9f) * 10.0f);
-		}
+  const Rectangle dest = {center.x + offsetX, center.y + offsetY,
+                          static_cast<float>(screenWidth) * scale,
+                          static_cast<float>(screenHeight) * scale};
 
-		Color dropTop = { 40,0,0,255 };
-		Color dropBot = { 255,60,0,255 };
+  const Vector2 origin = {dest.width * 0.5f, dest.height * 0.5f};
 
-		if (bassShock > 0.8f) {
-			dropTop = ColorLerp(dropTop, { 255,255,200,255 }, (bassShock - 0.8f) * 5.0f);
-		}
-
-		Color finalTop = ColorLerp(normalTop, dropTop, bassShock);
-		Color finalBot = ColorLerp(normalBot, dropBot, bassShock);
-
-		auto sd = [=](const Bar& bar) {
-			SolidDrawer sd(finalTop, finalBot);
-			sd(bar);
-			};
-
-		auto gd = [=](const Bar& bar) {
-			GhostDrawer gd(ColorAlpha(ghostColor, 0.25f));
-			gd(bar);
-			};
-
-		visBars.emplace_back(Bar{ mainHeight, (int)barWidth, xLeft, xRight, mainY }, sd);
-		visBars.emplace_back(Bar{ ghostHeight, (int)barWidth, xLeft, xRight, ghostY }, gd);
-	};
+  BeginBlendMode(BLEND_ALPHA);
+  DrawTexturePro(target.texture, src, dest, origin, angle, WHITE);
+  EndBlendMode();
 }
 
-void GraphicsThread::DrawGridLines()
-{
-	BeginBlendMode(BLEND_ADDITIVE);
-	const float horizonY = screenHeight / 2.0f;
-	const float centerX = screenWidth / 2.0f;
-	const float time = (float)GetTime();
-
-	// Draw horizontal lines
-	for (int i = 0; i < 25; ++i)
-	{
-		float movement = fmodf(time * 100.0f, 100.0f);
-
-		float dist = (i * i * 2.5f);
-		if (dist + horizonY > screenHeight) break;
-
-		float y = horizonY + dist + (movement * (i * 0.05f));
-
-		float alpha = fminf(1.0f, i / 5.0f) * 0.3f;
-		DrawLine(-200, y, screenWidth + 200, y, ColorAlpha(GRID_COLOR, alpha));
-	}
-
-	// Draw vertical lines
-	for (int i = -10; i <= 10; ++i)
-	{
-		if (i == 0) continue;
-
-		float spread = i * (screenWidth * 0.15f);
-
-		DrawLine(centerX, horizonY, centerX + spread, screenHeight, GRID_COLOR);
-	}
-
-	DrawLine(0, horizonY, screenWidth, horizonY, NEON_CYAN);
-	DrawLine(0, horizonY + 1, screenWidth, horizonY + 1, ColorAlpha(NEON_CYAN, 0.5f));
-	EndBlendMode();
+void GraphicsThread::DrawVisualBars() const {
+  BeginBlendMode(BLEND_ADDITIVE);
+  for (auto &visual : this->visBars) {
+    draw(visual);
+  }
+  EndBlendMode();
 }
 
-void GraphicsThread::ScreenShake()
-{
-	const float dt = GetFrameTime();
-	const float time = GetTime();
-	const float bassLimit = 0.7f;
-	const float shakeMult = 1.5f;
-	const float shakeLimit = 0.7f;
-	const float decaySpeed = 5.0f;
+void GraphicsThread::Draw() {
+  this->prepareVisuals();
 
-	static float shakeEnergy = 0.0f;
-	float bass = smoothState.empty() ? 0.0f : smoothState[0];
+  const float dt = GetFrameTime();
+  const auto time = static_cast<float>(GetTime());
 
-	if (bass > bassLimit)
-	{
-		float hitStrength = (bass - bassLimit) / 0.3f;
-		shakeEnergy += hitStrength * 0.1f;
-	}
+  float rawBass = smoothState.empty() ? 0.0f : smoothState[0];
+  if (std::isnan(rawBass)) {
+    rawBass = 0.0f;
+  }
 
-	shakeEnergy -= decaySpeed * dt;
-	if (shakeEnergy < 0.0f) shakeEnergy = 0.0f;
+  const float bass = std::clamp(rawBass, 0.0f, 1.0f);
+  if (bass > 0.6f) {
+    mBeatEnergy += (bass - 0.6f) * 5.0f * dt;
+  }
 
-	const Rectangle srcRec = { 0,0, (float)target.texture.width, (float)-target.texture.height };
-	const Vector2 origin = { 0, 0 };
+  mBeatEnergy -= 1.5f * dt;
+  mBeatEnergy = std::clamp(mBeatEnergy, 0.0f, 1.0f);
 
-	float rawShake = shakeEnergy * shakeEnergy * shakeMult;
-	if (rawShake > shakeLimit) rawShake = shakeLimit;
+  const float targetZoom = 1.0f + (mBeatEnergy * 0.15f);
+  mCamera.zoom = Lerp(mCamera.zoom, targetZoom, 5.0f * dt);
 
-	const float shakePower = rawShake;
-	const float shakeX = sinf(time * 30.0f) * shakePower;
-	const float shakeY = cosf(time * 20.0f) * (shakePower * 0.5f);
+  const float sway = sinf(time * 0.5f) * 0.02f;
+  mCamera.rotation = (sway * RAD2DEG) + (mBeatEnergy * 2.0f);
 
-	// Draw to shakeX and shakeY
-	BeginBlendMode(BLEND_ALPHA);
-	DrawTexturePro(target.texture, srcRec,
-		{ shakeX, shakeY, (float)screenWidth, (float)screenHeight },
-		origin, 0.0f, WHITE);
-	EndBlendMode();
-}
+  BeginTextureMode(target);
 
-void GraphicsThread::DrawVisualBars()
-{
-	BeginBlendMode(BLEND_ADDITIVE);
-	for (auto& visual : this->visBars)
-	{
-		draw(visual);
-	}
-	EndBlendMode();
-}
+  BeginBlendMode(BLEND_ALPHA);
+  DrawRectangle(0, 0, screenWidth, screenHeight, Color{0, 0, 0, 60});
+  EndBlendMode();
 
-void GraphicsThread::Draw()
-{
-	// Clear and reserve memory for visual bars before drawing
-	visBars.clear();
-	visBars.reserve(BUCKET_COUNT * 2);
-	this->prepareVisuals();
+  BeginMode2D(mCamera);
 
-	static float intensity = 0.0f;
+  if (mBeatEnergy > 0.1f) {
+    BeginBlendMode(BLEND_ADDITIVE);
+    const Color glowCol = ColorAlpha(NEON_ORANGE, mBeatEnergy * 0.4f);
+    DrawCircleGradient(static_cast<int>(halfWidth),
+                       static_cast<int>(screenHeight / 2), halfWidth * 1.5f,
+                       glowCol, BLANK);
+    EndBlendMode();
+  }
 
-	// Constants
-	const float dt = GetFrameTime();
-	const Color bgColor = { 2, 2, 10, 255 };
-	const Color transparentColor = Color{ 0,0,0,70 };
-	const float bassThreshold = 0.6f;
-	const float attackSpeed = std::min(5.0f * dt, 1.0f);
-	const float decaySpeed = std::min(1.5f * dt, 1.0f);
+  // Drawing Main Drawables (Bars, Particles, GridLines)
+  DrawGridLines();
+  particleGenerator.Draw();
+  DrawVisualBars();
 
-	float rawBass = smoothState.empty() ? 0.0f : smoothState[0];
-	if (std::isnan(rawBass)) rawBass = 0.0f;
-	const float bass = std::clamp(rawBass, 0.0f, 1.0f);
+  EndMode2D();
+  EndTextureMode();
 
-	if (bass > bassThreshold) intensity += (bass - bassThreshold) * 3.0f * dt;
-
-	intensity -= 2.0f * dt;
-	intensity = std::clamp(intensity, 0.0f, 1.0f);
-
-	const float targetZoom = 1.0f + (intensity * 0.05f);
-	const float maxAngle = 1.0f + (intensity * 4.0f);
-
-	if (targetZoom > mCamera.zoom) mCamera.zoom = Lerp(mCamera.zoom, targetZoom, attackSpeed);
-	else mCamera.zoom = Lerp(mCamera.zoom, targetZoom, decaySpeed);
-
-	mCamera.zoom = std::clamp(mCamera.zoom, 0.5f, 1.15f);
-	mCamera.rotation = sinf((float)GetTime() * 1.0f) * maxAngle;
-
-	BeginTextureMode(target);
-	BeginBlendMode(BLEND_ALPHA);
-
-	DrawRectangle(0, 0, target.texture.width, target.texture.height, transparentColor);
-	EndBlendMode();
-
-	BeginMode2D(mCamera);
-
-	// Create glowing flash
-	if (intensity > bassThreshold)
-	{
-		BeginBlendMode(BLEND_ADDITIVE);
-		Color centerCol = ColorAlpha(CyberpunkColors::NEON_ORANGE, intensity * 0.5);
-		Color edgeCol = ColorAlpha(BLACK, 0.0f);
-		DrawCircleGradient(screenWidth / 2, screenHeight / 2, screenWidth * 0.8f, centerCol, edgeCol);
-		EndBlendMode();
-	}
-
-	this->DrawGridLines();
-	particleGenerator.Draw();
-	this->DrawVisualBars();
-
-	EndMode2D();
-	EndTextureMode();
-
-	//BeginDrawing();
-	ClearBackground(bgColor);
-	this->ScreenShake();
-
-	Rectangle source = {0, 0, (float)target.texture.width, -(float)target.texture.height};
-	Rectangle dest = {0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()};
-	Vector2 origin = {0, 0};
-
-	DrawTexturePro(target.texture, source, dest, origin, 0.0f, WHITE);
-	//EndDrawing();
+  this->ScreenShake();
 }
