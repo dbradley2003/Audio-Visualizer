@@ -2,10 +2,7 @@
 #define CONSTANTS_H
 
 #include "raylib.h"
-#include <vector>
 #include <array>
-#include <algorithm>
-#include <iostream>
 
 constexpr double pi = 3.14159265358979323846;
 constexpr int TABLE_SIZE = 2048;
@@ -15,13 +12,10 @@ namespace Constants
 	static constexpr int FFT_SIZE = 4096;
 	static constexpr int BIN_COUNT = FFT_SIZE / 2;
 	static constexpr int HOP_SIZE = 512;
-
 	static constexpr int BUCKET_COUNT = 64;
 	static constexpr int BAR_SPACING = 1;
-
-	static constexpr float SMOOTHNESS = 30.0f;
+	static constexpr float SMOOTHNESS = 15.0f;
 	static constexpr float SMEAREDNESS = 5.0f;
-
 	static constexpr int PARTICLE_COUNT = 1000;
 }
 
@@ -43,7 +37,6 @@ namespace CyberpunkColors {
 constexpr double const_sin(double x)
 {
 	while (x > pi) x -= 2 * pi;
-
 	while (x < -pi) x += 2 * pi;
 
 	double res = x;
@@ -55,7 +48,6 @@ constexpr double const_sin(double x)
 	term *= -x2 / (6 * 7);    res += term;
 	term *= -x2 / (8 * 9);    res += term;
 	term *= -x2 / (10 * 11);  res += term;
-
 	return res;
 }
 

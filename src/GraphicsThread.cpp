@@ -13,7 +13,6 @@ using namespace CyberpunkColors;
 
 namespace
 {
-
 	class GhostDrawer {
 	public:
 		GhostDrawer(Color mColor_)
@@ -76,30 +75,27 @@ GraphicsThread::GraphicsThread(int screenWidth_, int screenHeight_, TripleBuffer
 	share_ag(share_ag_),
 	smoothState(BUCKET_COUNT, 0.0f),
 	smearedState(BUCKET_COUNT, 0.0f),
-	mTargetZoom(1.0f),
-	particleGenerator()
+	mTargetZoom(1.0f)
 {
 	visBars.reserve(BUCKET_COUNT * 2);
 }
 
 void GraphicsThread::Initialize()
 {
-	//screenWidth = 1280;
-	//screenHeight = 720;
-
-	SetConfigFlags(FLAG_WINDOW_HIGHDPI);
-	//SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT | FLAG_WINDOW);
+	SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
-	SetTargetFPS(144);
 
-	this->target = LoadRenderTexture(screenWidth, screenHeight);
-	SetTextureWrap(target.texture, TEXTURE_WRAP_CLAMP);
+	Vector2 scale = GetWindowScaleDPI();
+	this->target = LoadRenderTexture(screenWidth * scale.x, screenHeight * scale.y);
 	SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
+
+	// this->target = LoadRenderTexture(screenWidth, screenHeight);
+	// SetTextureWrap(target.texture, TEXTURE_WRAP_CLAMP);
+
 
 	this->halfWidth = (float)screenWidth / 2.0f;
 	float availableWidth = halfWidth - (BAR_SPACING * BUCKET_COUNT);
 	this->barWidth = std::max(std::floor(availableWidth / (float)BUCKET_COUNT), 1.0f);
-
 	this->readBuffer = share_ag.consumerReadBuffer();
 
 	mCamera.zoom = 1.0f;
@@ -118,12 +114,11 @@ bool GraphicsThread::Swap()
 void GraphicsThread::Update()
 {
 	this->Swap();
-	if (!this->readBuffer || (*this->readBuffer).empty())
-	{
+	if (!this->readBuffer || (*this->readBuffer).empty()) {
 		return;
 	}
+
 	this->fftProcess();
-	this->Draw();
 }
 
 void GraphicsThread::fftProcess()
@@ -168,7 +163,7 @@ void GraphicsThread::prepareVisuals()
 	const int centerY = screenHeight / 2;
 	const int size = static_cast<int>(smoothState.size());
 	const int maxBin = std::min(size, 20);
-	const float TREBLE_MULT = 2.0f;
+	const float TREBLE_MULT = 1.5f;
 
 	float bass = smoothState.empty() ? 0.0f : smoothState[0];
 	float bassShock = bass * bass * bass;
@@ -221,7 +216,9 @@ void GraphicsThread::prepareVisuals()
 		Color dropTop = { 40,0,0,255 };
 		Color dropBot = { 255,60,0,255 };
 
-		if (bassShock > 0.8f) dropTop = ColorLerp(dropTop, { 255,255,200,255 }, (bassShock - 0.8f) * 5.0f);
+		if (bassShock > 0.8f) {
+			dropTop = ColorLerp(dropTop, { 255,255,200,255 }, (bassShock - 0.8f) * 5.0f);
+		}
 
 		Color finalTop = ColorLerp(normalTop, dropTop, bassShock);
 		Color finalBot = ColorLerp(normalBot, dropBot, bassShock);
@@ -244,7 +241,6 @@ void GraphicsThread::prepareVisuals()
 void GraphicsThread::DrawGridLines()
 {
 	BeginBlendMode(BLEND_ADDITIVE);
-
 	const float horizonY = screenHeight / 2.0f;
 	const float centerX = screenWidth / 2.0f;
 	const float time = (float)GetTime();
@@ -364,6 +360,7 @@ void GraphicsThread::Draw()
 
 	BeginTextureMode(target);
 	BeginBlendMode(BLEND_ALPHA);
+
 	DrawRectangle(0, 0, target.texture.width, target.texture.height, transparentColor);
 	EndBlendMode();
 
@@ -380,17 +377,20 @@ void GraphicsThread::Draw()
 	}
 
 	this->DrawGridLines();
-
 	particleGenerator.Draw();
-
 	this->DrawVisualBars();
 
 	EndMode2D();
 	EndTextureMode();
 
-	BeginDrawing();
+	//BeginDrawing();
 	ClearBackground(bgColor);
 	this->ScreenShake();
-	DrawFPS(10, 10);
-	EndDrawing();
+
+	Rectangle source = {0, 0, (float)target.texture.width, -(float)target.texture.height};
+	Rectangle dest = {0, 0, (float)GetScreenWidth(), (float)GetScreenHeight()};
+	Vector2 origin = {0, 0};
+
+	DrawTexturePro(target.texture, source, dest, origin, 0.0f, WHITE);
+	//EndDrawing();
 }

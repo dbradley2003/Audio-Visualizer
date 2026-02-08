@@ -3,31 +3,24 @@
 #include "AnalyzerThread.h"
 #include "GraphicsThread.h"
 #include "TripleBuffer.h"
-
 #include "constants.h"
-#include <filesystem>
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "winmm.lib")
 
-std::atomic<bool> doneFlag(false);
+#define SCREEN_HEIGHT 1280
+#define SCREEN_WIDTH 720
 
-namespace fs = std::filesystem;
+std::atomic<bool> doneFlag(false);
 
 int main()
 {
-	
-	
-	fs::path currentPath = fs::current_path();
-	std::cout << "Current working directory" << currentPath << std::endl;
-	std::string filePath = "demos/audio3.wav";
-
+	std::string filePath = "demos/audio1.wav";
 	TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
 
 	// SPSC lock-free ring buffer used by audio callback and analyzer
 	RingBuffer ringBuffer = RingBuffer();
-
 	AudioEngine audioObj = AudioEngine(ringBuffer, filePath);
 
 	// launched as a functor in its overloaded operator()
@@ -38,24 +31,23 @@ int main()
 	);
 
 	analyzerThread.Launch();
-
-	if (!audioObj.Init())
-	{
+	if (!audioObj.Init()) {
 		return EXIT_FAILURE;
 	}
+
 	audioObj.Start();
 
-	GraphicsThread visualizer{ 1920,1080, tripleBuffer };
+	GraphicsThread visualizer{ SCREEN_HEIGHT,SCREEN_WIDTH, tripleBuffer };
 	visualizer.Initialize(); // initialize window and constants
-
-	while (!WindowShouldClose())
-	{
-		BeginDrawing();
+	while (!WindowShouldClose()) {
 		visualizer.Update();
+		BeginDrawing();
+		ClearBackground(BLACK);
+		visualizer.Draw();
+		DrawFPS(10, 10);
 		EndDrawing();
 	}
 
 	doneFlag.store(true);
-
 	return EXIT_SUCCESS;
 }

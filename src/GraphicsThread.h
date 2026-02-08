@@ -24,12 +24,12 @@ public:
 
 	void Initialize();
 	void Update();
-	
+	void Draw();
 	
 private:
 	void prepareVisuals();
 	void fftProcess();
-	void Draw();
+
 	bool Swap();
 
 	void DrawGridLines();

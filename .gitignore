@@ -9,6 +9,8 @@ build/
 out/
 bin/
 
+.idea/
+
 CMakeSettings.json
 
 project_outline.md

@@ -30,16 +30,16 @@ struct ParticleGenerator
 			
 			if (isBackground)
 			{
-				p.size = (float)GetRandomValue(1, 2) * 0.5f;
+				p.size = (float)GetRandomValue(1, 2) * 0.85f;
 				p.velocity.x = (float)GetRandomValue(-20, 20);
 				p.velocity.y = (float)GetRandomValue(-20, 20);
 				p.alphaOffset = 0.25f;
 			}
 			else
 			{
-				p.size = (float)GetRandomValue(2,4);
-				p.velocity.x = (float)GetRandomValue(-200, 200);
-				p.velocity.y = (float)GetRandomValue(-200, 200);
+				p.size = (float)GetRandomValue(1,2) * 0.5;
+				p.velocity.x = (float)GetRandomValue(-100, 100);
+				p.velocity.y = (float)GetRandomValue(-100, 100);
 				p.alphaOffset = 1.0f;
 			}
 
@@ -66,15 +66,15 @@ struct ParticleGenerator
 		float bassShock = bass * bass * bass;
 		float trebleShock = treble * treble;
 
-		float globalSpeed = 1.0f + (bassShock * 10.0f);
-		float globalPulse = 1.0f + (bassShock * 5.5f);
+		float globalSpeed = 1.0f + (bassShock * 5.0f);
+		float globalPulse = 1.0f + (bassShock * 1.5f);
 
 		for (auto& p : particles)
 		{
 			float depthFactor = (p.size / 4.0f);
 			float depthSpeed = globalSpeed * (0.5f + depthFactor);
 
-			float driftX = FastSin(p.id * 1.7f + (float)GetTime()) * 40.0f;
+			float driftX = FastSin(p.id * 1.7f + (float)GetTime()) * 20.0f;
 			float driftY = FastSin(p.id * 2.3f + (float)GetTime() + 2.0f) * 40.0f;
 
 			float rawMoveX = (p.velocity.x + driftX) * depthSpeed;
