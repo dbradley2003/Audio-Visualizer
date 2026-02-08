@@ -22,7 +22,7 @@ namespace Constants
 	static constexpr float SMOOTHNESS = 30.0f;
 	static constexpr float SMEAREDNESS = 5.0f;
 
-	static constexpr int PARTICLE_COUNT = 2000;
+	static constexpr int PARTICLE_COUNT = 1000;
 }
 
 namespace CyberpunkColors {

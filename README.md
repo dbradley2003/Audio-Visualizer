@@ -9,9 +9,9 @@ A real-time, multi-threaded audio visualization engine written in C++ using Rayl
 * Runs audio processing and graphical rendering on separate threads to prevent UI blocking and ensure
 a locked 60 FPS.
 
-* Utilizes a Lock-Free Single-Producer-Single-Consumer (SPSC) Ring Buffer to ensure uninterrupted audio streaming.
+* Utilizes a Lock-Free Single-Producer-Single-Consumer (SPSC) Ring Buffer for uninterrupted audio streaming.
 
-* Uses Raylib for the graphical rendering of frequency bars.
+* Uses Raylib for the graphical rendering of frequency bars and circular visuals.
 
 ## Video Examples
 

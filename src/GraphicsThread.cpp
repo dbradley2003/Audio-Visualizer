@@ -84,12 +84,13 @@ GraphicsThread::GraphicsThread(int screenWidth_, int screenHeight_, TripleBuffer
 
 void GraphicsThread::Initialize()
 {
-	screenWidth = 2560;
-	screenHeight = 1440;
+	//screenWidth = 1280;
+	//screenHeight = 720;
 
-	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
+	SetConfigFlags(FLAG_WINDOW_HIGHDPI);
+	//SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT | FLAG_WINDOW);
 	InitWindow(screenWidth, screenHeight, "FFT Visualizer");
-	SetTargetFPS(60);
+	SetTargetFPS(144);
 
 	this->target = LoadRenderTexture(screenWidth, screenHeight);
 	SetTextureWrap(target.texture, TEXTURE_WRAP_CLAMP);

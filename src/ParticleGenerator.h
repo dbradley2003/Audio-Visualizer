@@ -30,14 +30,14 @@ struct ParticleGenerator
 			
 			if (isBackground)
 			{
-				p.size = (float)GetRandomValue(1, 2) * 0.3f;
+				p.size = (float)GetRandomValue(1, 2) * 0.5f;
 				p.velocity.x = (float)GetRandomValue(-20, 20);
 				p.velocity.y = (float)GetRandomValue(-20, 20);
 				p.alphaOffset = 0.25f;
 			}
 			else
 			{
-				p.size = (float)GetRandomValue(2,4) * 0.3f;
+				p.size = (float)GetRandomValue(2,4);
 				p.velocity.x = (float)GetRandomValue(-200, 200);
 				p.velocity.y = (float)GetRandomValue(-200, 200);
 				p.alphaOffset = 1.0f;
@@ -115,8 +115,8 @@ struct ParticleGenerator
 				p.pos.y + p.pulseSize * 0.35f
 			};
 
-			/*DrawCircleGradient((int)corePos.x, (int)corePos.y, coreSize * 2.0f, ColorAlpha(p.baseColor, p.alphaOffset),
-				ColorAlpha(BLACK, 0.0f));*/
+			//DrawCircleGradient((int)corePos.x, (int)corePos.y, coreSize * 2.0f, ColorAlpha(p.baseColor, p.alphaOffset),
+			//	ColorAlpha(BLACK, 0.0f));
 
 			DrawRectangleV(corePos, { coreSize, coreSize }, ColorAlpha(p.baseColor, p.alphaOffset));
 		}

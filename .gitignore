@@ -9,6 +9,8 @@ build/
 out/
 bin/
 
+CMakeSettings.json
+
 project_outline.md
 
 # User-specific files

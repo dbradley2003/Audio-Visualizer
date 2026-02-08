@@ -5,6 +5,7 @@
 #include "TripleBuffer.h"
 
 #include "constants.h"
+#include <filesystem>
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -12,8 +13,14 @@
 
 std::atomic<bool> doneFlag(false);
 
+namespace fs = std::filesystem;
+
 int main()
 {
+	
+	
+	fs::path currentPath = fs::current_path();
+	std::cout << "Current working directory" << currentPath << std::endl;
 	std::string filePath = "demos/audio3.wav";
 
 	TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
@@ -25,20 +32,20 @@ int main()
 
 	// launched as a functor in its overloaded operator()
 	AnalyzerThread analyzerThread = AnalyzerThread(
-		std::ref(ringBuffer), 
+		std::ref(ringBuffer),
 		std::ref(tripleBuffer),
 		std::ref(doneFlag)
 	);
 
-	analyzerThread.Launch(); 
-	
+	analyzerThread.Launch();
+
 	if (!audioObj.Init())
 	{
 		return EXIT_FAILURE;
 	}
 	audioObj.Start();
 
-	GraphicsThread visualizer{ 1920,1280, tripleBuffer };
+	GraphicsThread visualizer{ 1920,1080, tripleBuffer };
 	visualizer.Initialize(); // initialize window and constants
 
 	while (!WindowShouldClose())
@@ -49,6 +56,6 @@ int main()
 	}
 
 	doneFlag.store(true);
-	
+
 	return EXIT_SUCCESS;
 }
