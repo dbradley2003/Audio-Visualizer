@@ -32,7 +32,7 @@
 template <typename T> class TripleBuffer {
 public:
   TripleBuffer(int size)
-      : mtx(), newDataReady(false), sharedBuffer(std::make_unique<T>(size)),
+      : newDataReady(false), sharedBuffer(std::make_unique<T>(size)),
         producerWriteBuffer_(std::make_unique<T>(size)),
         consumerReadBuffer_(std::make_unique<T>(size)) {}
 
@@ -45,13 +45,13 @@ public:
   }
 
   void swapProducer(std::unique_ptr<T> &producerBuff) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard lck(mtx);
     std::swap(this->sharedBuffer, producerBuff);
     newDataReady = true;
   }
 
   bool swapConsumer(std::unique_ptr<T> &consumerBuff) {
-    std::unique_lock<std::mutex> lck(mtx, std::try_to_lock);
+    std::unique_lock lck(mtx, std::try_to_lock);
     if (!newDataReady.load() || !lck) {
       return false;
     }

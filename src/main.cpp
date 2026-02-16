@@ -12,19 +12,23 @@
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
 
-std::atomic<bool> doneFlag(false);
+
+
+std::atomic_bool doneFlag(false);
 int main() {
   // select to play any file in demos directory
-  std::string filePath = "demos/audio2.wav";
-  TripleBuffer<std::vector<float>> tripleBuffer(Constants::BIN_COUNT);
+  std::string filePath = "demos/audio4.wav";
+  TripleBuffer<std::vector<float>> tripleBuffer(BIN_COUNT);
 
   // SPSC lock-free ring buffer used by audio callback and analyzer
-  RingBuffer ringBuffer = RingBuffer();
-  AudioEngine audioObj = AudioEngine(ringBuffer, filePath);
+
+  RingBuffer sharedRingBuffer;
+
+  AudioEngine audioObj(sharedRingBuffer, filePath);
 
   // launched as a functor in its overloaded operator()
-  AnalyzerThread analyzerThread = AnalyzerThread(
-      std::ref(ringBuffer), std::ref(tripleBuffer), std::ref(doneFlag));
+  AnalyzerThread analyzerThread(std::ref(sharedRingBuffer),
+                                std::ref(tripleBuffer), std::ref(doneFlag));
 
   analyzerThread.Launch();
   if (!audioObj.Init()) {

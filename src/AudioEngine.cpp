@@ -1,19 +1,13 @@
+#include "AudioEngine.h"
 #include <iostream>
 #include <string>
 
-#include "AudioEngine.h"
-#include "RingBuffer.h"
-
-
-#pragma warning(disable : 4100)
-
 void AudioEngine::ma_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-	AudioEngine* pEngine = (AudioEngine*)pDevice->pUserData;
+	auto* pEngine = static_cast<AudioEngine *>(pDevice->pUserData);
 
-	float* pOutputF32 = (float*)pOutput;
+	auto* pOutputF32 = static_cast<float*>(pOutput);
 
-	if (pEngine->decoder.pBackendVTable == NULL)
-	{
+	if (pEngine->decoder.pBackendVTable == NULL) {
 		memset(pOutput, 0, frameCount * ma_get_bytes_per_frame(pDevice->playback.format, pDevice->playback.channels));
 		return;
 	}
@@ -21,22 +15,26 @@ void AudioEngine::ma_data_callback(ma_device* pDevice, void* pOutput, const void
 	ma_uint64 framesRead;
 	ma_decoder_read_pcm_frames(&pEngine->decoder, pOutput, frameCount, &framesRead);
 
-	if (framesRead < frameCount)
-	{
+	if (framesRead < frameCount) {
 		ma_decoder_seek_to_pcm_frame(&pEngine->decoder, 0);
-		ma_uint64 framesRemaining = frameCount - framesRead;
-		float* pNextOutputPart = pOutputF32 + (framesRead * pDevice->playback.channels);
+		const ma_uint64 framesRemaining = frameCount - framesRead;
+
+
+		//float* pNextOutputPart = pOutputF32 + (framesRead * pDevice->playback.channels);
+		float* pNextOutputPart = pOutputF32 + framesRead;
+
 		ma_uint64 extraFramesRead = 0;
 		ma_decoder_read_pcm_frames(&pEngine->decoder, pNextOutputPart, framesRemaining, &extraFramesRead);
 		framesRead += extraFramesRead;
 	}
 
-	for (ma_uint32 i{}; i < (ma_uint32)framesRead; ++i)
-	{
-		float left = pOutputF32[i * 2];
-		float right = pOutputF32[i * 2 + 1];
-		float monoSample = (left + right) * 0.5f;
-		pEngine->circularQueue.PushBack(monoSample);
+	for (ma_uint32 i{}; i < static_cast<ma_uint32>(framesRead); ++i) {
+		//const float left = pOutputF32[i * 2];
+		//const float right = pOutputF32[i * 2 + 1];
+		//const float monoSample = (left + right) * 0.5f;
+		//pEngine->circularQueue.PushBack(monoSample);
+		const float sample = pOutputF32[i];
+		pEngine->circularQueue.PushBack(sample);
 	}
 }
 
@@ -68,11 +66,11 @@ bool AudioEngine::Start()
 bool AudioEngine::Init()
 {
 	ma_decoder_config decoderConfig;
-	decoderConfig = ma_decoder_config_init(ma_format_f32, 2, 44100);
+	decoderConfig = ma_decoder_config_init(ma_format_f32, 1, 0);
 
 	if (ma_decoder_init_file(filePath.c_str(), &decoderConfig, &decoder) != MA_SUCCESS)
 	{
-		std::cerr << "Error ocurred initializing decoder" << std::endl;
+		std::cerr << "Error occurred initializing decoder" << std::endl;
 		return false;
 	}
 
@@ -80,7 +78,7 @@ bool AudioEngine::Init()
 	deviceConfig.playback.format = decoder.outputFormat;
 	deviceConfig.playback.channels = decoder.outputChannels;
 	deviceConfig.sampleRate = decoder.outputSampleRate;
-	deviceConfig.dataCallback = AudioEngine::ma_data_callback;
+	deviceConfig.dataCallback = ma_data_callback;
 	deviceConfig.pUserData = this;
 
 	if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)

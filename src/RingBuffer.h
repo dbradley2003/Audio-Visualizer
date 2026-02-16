@@ -1,17 +1,16 @@
 #ifndef RING_BUFFER_H
 #define RING_BUFFER_H
 
+#include <__new/interference_size.h>
+#include <array>
 #include <atomic>
-
-#pragma warning(push)
-#pragma warning(disable : 4324)
 
 class RingBuffer {
 public:
-  constexpr static unsigned BUFFER_CAPACITY = 1 << 15;
-  constexpr static unsigned CACHE_LINE = 64;
+  constexpr static unsigned BUFFER_SIZE = 1 << 15;
+  constexpr static int BATCH_SIZE = 128;
 
-  RingBuffer();
+  RingBuffer() = default;
   RingBuffer(const RingBuffer &) = delete;
   RingBuffer(RingBuffer &&) = delete;
   RingBuffer &operator=(RingBuffer &) = delete;
@@ -20,29 +19,31 @@ public:
 
   bool PushBack(float val);
   bool PopFront(float &val);
-  int GetAvailable() const;
+  size_t GetAvailable() const;
 
 private:
-  int inc(int val) const;
-  int mask(int val) const;
+  size_t inc(size_t val) const;
+  size_t mask(size_t val) const;
 
-  alignas(CACHE_LINE) std::atomic<int> read{0};
-  alignas(CACHE_LINE) std::atomic<int> write{0};
+  alignas(std::hardware_destructive_interference_size) std::atomic<size_t> read{
+      0};
+  alignas(
+      std::hardware_destructive_interference_size) std::atomic<size_t> write{0};
 
   /*Consumer Local Variables*/
-  alignas(CACHE_LINE) int localWrite;
-  int nextRead;
-  int rBatch;
+  alignas(std::hardware_destructive_interference_size) size_t localWrite{0};
+  size_t nextRead{0};
+  size_t rBatch{0};
 
   /*Producer Local Variables*/
-  alignas(CACHE_LINE) int localRead;
-  int nextWrite;
-  int wBatch;
+  alignas(std::hardware_destructive_interference_size) size_t localRead{0};
+  size_t nextWrite{0};
+  size_t wBatch{0};
 
   /*Constant variables*/
-  alignas(CACHE_LINE) float data[BUFFER_CAPACITY];
-  const int batchSize = 50;
+  alignas(std::hardware_destructive_interference_size)
+      std::array<float, BUFFER_SIZE> data{};
 };
-
+// namespace AudioEngineDetails
 #endif
 #pragma warning(pop)

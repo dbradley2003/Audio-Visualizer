@@ -4,6 +4,8 @@ project(AudioVisualizer CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_OSX_ARCHITECTURES "arm64")
+
 include(FetchContent)
 
 message(STATUS "Fetching Raylib...")
@@ -28,7 +30,8 @@ file(GLOB_RECURSE SOURCES
     "src/*.h"
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME} ${SOURCES}
+        src/ParticleGenerator.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_include_directories(${PROJECT_NAME} PRIVATE ${miniaudio_SOURCE_DIR})

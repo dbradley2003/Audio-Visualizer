@@ -1,20 +1,14 @@
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 
 #include "AnalyzerThread.h"
 #include "RingBuffer.h"
 
-#pragma warning(disable : 4267)
-#pragma warning(disable : 4244)
-#pragma warning(disable : 4305)
-
-#define PI 3.14159265358979323846f
-
-AnalyzerThread::AnalyzerThread(RingBuffer &_ringBuffer,
-                               TripleBuffer<std::vector<float>> &_share_ag,
-                               std::atomic<bool> &_done)
-    : ringBuffer(_ringBuffer), share_ag(_share_ag), mThread(), done(_done) {
+AnalyzerThread::AnalyzerThread(RingBuffer &ringBuffer,
+                               TripleBuffer<std::vector<float>> &share_ag,
+                               std::atomic<bool> &done)
+    : ringBuffer(ringBuffer), share_ag(share_ag), done(done)
+{
   this->outputBuckets = this->share_ag.producerWriteBuffer();
   std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
   std::fill(samples.begin(), samples.end(), 0);
@@ -22,9 +16,10 @@ AnalyzerThread::AnalyzerThread(RingBuffer &_ringBuffer,
 }
 
 void AnalyzerThread::InitHannTable() {
-  int n = Constants::FFT_SIZE;
-  for (int i{}; i < n; ++i) {
-    this->m_hannTable[i] = 0.54 - 0.46 * cosf(2.0f * PI * i / (n - 1));
+  for (int i = 0; i < FFT_SIZE; ++i) {
+    this->m_hannTable[i] =
+        0.54f - 0.46f * cosf(2.0f * PI * static_cast<float>(i) /
+                             static_cast<float>(FFT_SIZE - 1));
   }
 }
 
@@ -89,11 +84,9 @@ AnalyzerThread::~AnalyzerThread() {
 }
 
 void AnalyzerThread::GetSamples() {
+  if (ringBuffer.GetAvailable() > HOP_SIZE) {
 
-  const int available = ringBuffer.GetAvailable();
-  if (available > HOP_SIZE) {
-
-    // move window 128 items over
+    // move window HOP_SIZE items over
     std::copy(this->samples.begin() + HOP_SIZE, this->samples.end(),
               this->samples.begin());
 
@@ -123,7 +116,7 @@ void AnalyzerThread::Update() {
   constexpr int binCount = FFT_SIZE / 2;
 
   for (int i{}; i < binCount; ++i) {
-    const float squaredMag = std::norm(this->fftData[i]);
+    const float squaredMag = static_cast<float>(std::norm(this->fftData[i]));
     const float db = 10.0f * log10f(squaredMag + 1e-12f);
     float normalized = (db + 60.0f) * invSixty;
     (*this->outputBuckets)[i] = std::clamp(normalized, 0.0f, 1.0f);

@@ -1,10 +1,12 @@
 #ifndef AUDIO_ENGINE_H
 #define AUDIO_ENGINE_H
 
-#include "miniaudio.h"
 #include <string>
 
-class RingBuffer;
+#include "miniaudio.h"
+#include "RingBuffer.h"
+
+
 
 class AudioEngine
 {
@@ -12,7 +14,7 @@ public:
 	AudioEngine(RingBuffer& queue, std::string& filePath);
 	AudioEngine(const AudioEngine&) = delete;
 	AudioEngine(AudioEngine&&) = delete;
-	AudioEngine& opertator(const AudioEngine&) = delete;
+	AudioEngine& operator =(const AudioEngine&) = delete;
 	AudioEngine& operator = (AudioEngine&&) = delete;
 	~AudioEngine();
 

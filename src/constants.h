@@ -10,12 +10,12 @@ constexpr int TABLE_SIZE = 2048;
 namespace Constants {
 static constexpr int FFT_SIZE = 4096;
 static constexpr int BIN_COUNT = FFT_SIZE / 2;
-static constexpr int HOP_SIZE = 512;
+static constexpr int HOP_SIZE = 256;
 static constexpr int BUCKET_COUNT = 128;
 static constexpr float BAR_SPACING = 2.0f;
 static constexpr float SMOOTHNESS = 10.0f;
-static constexpr float SMEAREDNESS = 3.0f;
-static constexpr int PARTICLE_COUNT = 1000;
+static constexpr float SMEAREDNESS = 4.0f;
+static constexpr int PARTICLE_COUNT = 500;
 static constexpr float TREBLE_MULTIPLIER = 3.0f;
 } // namespace Constants
 
@@ -26,6 +26,7 @@ static constexpr Color NEON_PINK = {255, 0, 175, 255};   // Hotline Miami Pink
 static constexpr Color NEON_GREEN = {0, 255, 65, 255};   // Matrix Green
 static constexpr Color NEON_PURPLE = {180, 0, 255, 255}; // Deep Neon
 static constexpr Color DARK_CYAN = {0, 15, 20, 255};
+static constexpr Color DARK_PURPLE = {20, 0, 30, 255};
 static constexpr Color NEON_ORANGE = {255, 60, 0, 255};
 static constexpr Color ICE_BLUE = {180, 255, 255, 255};
 static constexpr Color P_DEEP_VOID = {20, 0, 40, 255};
@@ -75,7 +76,7 @@ constexpr std::array<float, TABLE_SIZE> GenerateSineTable() {
 static constexpr auto SINE_TABLE = GenerateSineTable();
 
 inline float FastSin(float angle) {
-  float norm = angle / (2.0f * (float)pi);
+  float norm = angle / (2.0f * static_cast<float>(pi));
   norm = norm - (long)norm;
   if (norm < 0)
     norm += 1.0f;
