@@ -13,18 +13,14 @@
 #include "TripleBuffer.h"
 #include "constants.h"
 
-
-
 typedef std::complex<double> ComplexValue;
 typedef std::valarray<ComplexValue> ComplexArray;
 
-using namespace Constants;
-
 class AnalyzerThread {
 public:
-  AnalyzerThread(RingBuffer &ringBuffer,
-                 TripleBuffer<std::vector<float>> &share_ag,
-                 std::atomic<bool> &done);
+  AnalyzerThread(RingBuffer &inputQueue,
+                 TripleBuffer<std::vector<float>> &swapLocation,
+                 std::atomic<bool> &doneFlag);
   AnalyzerThread(const AnalyzerThread &) = delete;
   AnalyzerThread(AnalyzerThread &&) = delete;
   AnalyzerThread &operator=(const AnalyzerThread &) = delete;
@@ -33,23 +29,24 @@ public:
 
   void operator()();
   void Launch();
-  void Update();
+
 
 private:
   void fft(ComplexArray &data);
   void GetSamples();
-  void InitHannTable();
+  void Initialize();
   void ApplyHanning();
+  void Update();
 
-  RingBuffer &ringBuffer;
-  std::array<ComplexValue, FFT_SIZE> samples;
-  std::array<float, FFT_SIZE> m_hannTable;
-  std::unique_ptr<std::vector<float>> outputBuckets;
+  std::array<ComplexValue, Constants::FFT_SIZE> samples = {0};
+  std::array<float, Constants::FFT_SIZE> mHannTable = {0.0f};
 
   ComplexArray fftData;
-  TripleBuffer<std::vector<float>> &share_ag;
+  RingBuffer &inputQueue;
+  TripleBuffer<std::vector<float>> &swapLocation;
+  std::unique_ptr<std::vector<float>> buckets;
   std::thread mThread;
-  std::atomic<bool> &done;
+  std::atomic<bool> &doneFlag;
 };
 
 #endif

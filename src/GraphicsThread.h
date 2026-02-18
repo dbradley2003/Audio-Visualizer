@@ -51,12 +51,9 @@ private:
   float halfWidth{0.0f};
   RenderTexture2D target;
   ParticleGenerator particleGenerator;
-  Camera2D mCamera;
 
   // Control Variables
-  float mTargetZoom{1.0f};
   float mScreenTrauma{0.0f};
-  float mBeatEnergy{0.0f};
 };
 
 #endif

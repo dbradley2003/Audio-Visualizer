@@ -3,21 +3,22 @@
 
 #include "AnalyzerThread.h"
 #include "RingBuffer.h"
+#include <iostream>
+#include <cassert>
+using namespace std;
+using namespace Constants;
 
-AnalyzerThread::AnalyzerThread(RingBuffer &ringBuffer,
-                               TripleBuffer<std::vector<float>> &share_ag,
-                               std::atomic<bool> &done)
-    : ringBuffer(ringBuffer), share_ag(share_ag), done(done)
-{
-  this->outputBuckets = this->share_ag.producerWriteBuffer();
-  std::fill(m_hannTable.begin(), m_hannTable.end(), 0.0f);
-  std::fill(samples.begin(), samples.end(), 0);
-  this->InitHannTable();
+AnalyzerThread::AnalyzerThread(RingBuffer &inputQueue,
+                               TripleBuffer<vector<float>> &swapLocation,
+                               atomic<bool> &doneFlag)
+    : inputQueue(inputQueue), swapLocation(swapLocation), doneFlag(doneFlag),
+      buckets(swapLocation.producerWriteBuffer()) {
+  this->Initialize();
 }
 
-void AnalyzerThread::InitHannTable() {
+void AnalyzerThread::Initialize() {
   for (int i = 0; i < FFT_SIZE; ++i) {
-    this->m_hannTable[i] =
+    this->mHannTable[i] =
         0.54f - 0.46f * cosf(2.0f * PI * static_cast<float>(i) /
                              static_cast<float>(FFT_SIZE - 1));
   }
@@ -70,7 +71,7 @@ void AnalyzerThread::fft(ComplexArray &d) {
 }
 
 void AnalyzerThread::operator()() {
-  while (!done) {
+  while (!doneFlag) {
     Update();
   }
 }
@@ -84,8 +85,7 @@ AnalyzerThread::~AnalyzerThread() {
 }
 
 void AnalyzerThread::GetSamples() {
-  if (ringBuffer.GetAvailable() > HOP_SIZE) {
-
+  if (inputQueue.GetAvailable() >= HOP_SIZE) {
     // move window HOP_SIZE items over
     std::copy(this->samples.begin() + HOP_SIZE, this->samples.end(),
               this->samples.begin());
@@ -93,35 +93,35 @@ void AnalyzerThread::GetSamples() {
     constexpr size_t writeIndex = FFT_SIZE - HOP_SIZE;
     float val;
     for (int i = 0; i < HOP_SIZE; ++i) {
-      ringBuffer.PopFront(val);
+      inputQueue.PopFront(val);
       this->samples[writeIndex + i] = {val, 0};
     }
   }
 }
 
 void AnalyzerThread::ApplyHanning() {
-  for (int i{}; i < FFT_SIZE; ++i) {
-    this->fftData[i] *= this->m_hannTable[i];
+  for (int i = 0; i < FFT_SIZE; ++i) {
+    this->fftData[i] *= this->mHannTable[i];
   }
 }
 
 void AnalyzerThread::Update() {
-  // process raw audio data for spectral analysis
   this->GetSamples();
   this->fftData = ComplexArray(this->samples.data(), FFT_SIZE);
   this->ApplyHanning();
   this->fft(this->fftData);
 
-  constexpr float invSixty = 1.0f / 60.0f;
-  constexpr int binCount = FFT_SIZE / 2;
+  constexpr float dbFloor = 60.0f;
+  constexpr float invRange = 1.0f / dbFloor;
+  constexpr float dbAdd = dbFloor;
 
-  for (int i{}; i < binCount; ++i) {
-    const float squaredMag = static_cast<float>(std::norm(this->fftData[i]));
+  const size_t binCount = this->fftData.size() / 2;
+  for (int i = 0; i < binCount; ++i) {
+    const auto squaredMag = static_cast<float>(std::norm(this->fftData[i]));
     const float db = 10.0f * log10f(squaredMag + 1e-12f);
-    float normalized = (db + 60.0f) * invSixty;
-    (*this->outputBuckets)[i] = std::clamp(normalized, 0.0f, 1.0f);
+    float normalized = (db + dbAdd) * invRange;
+    (*this->buckets)[i] = std::clamp(normalized, 0.0f, 1.0f);
   }
 
-  // push new data to shared buffer for visualizer reading
-  this->share_ag.swapProducer(this->outputBuckets);
+  this->swapLocation.swapProducer(this->buckets);
 }

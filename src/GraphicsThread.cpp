@@ -41,8 +41,8 @@ class SolidDrawer {
 public:
   explicit SolidDrawer(const Color topColor, const Color bottomColor)
       : mTopColor(topColor), mBottomColor(bottomColor),
-        mGlowColor(ColorAlpha(topColor, 0.4f)),
-        mCapColor(ColorAlpha(WHITE, 0.95f)) {}
+        mGlowColor(ColorAlpha(topColor, 0.6f)),
+        mCapColor(ColorAlpha(WHITE, 0.9f)) {}
 
   void operator()(const Bar &bar) const {
     if (bar.height() < 1)
@@ -54,6 +54,12 @@ public:
     DrawRectangleGradientV(bar.xRight(), bar.y(), w, h, mTopColor,
                            mBottomColor);
     DrawRectangleGradientV(bar.xLeft(), bar.y(), w, h, mTopColor, mBottomColor);
+
+    if (w > 3) {
+      const Color core = ColorAlpha(WHITE, 0.3f);
+      DrawRectangle(bar.xRight() + w/2 -1, bar.y(), 2, h, core);
+      DrawRectangle(bar.xLeft() + w/2 -1, bar.y(), 2, h, core);
+    }
 
     DrawRectangle(bar.xLeft(), bar.y() - 2, w, 4, mGlowColor);
     DrawRectangle(bar.xRight(), bar.y() - 2, w, 4, mGlowColor);
@@ -74,23 +80,21 @@ GraphicsThread::GraphicsThread(const int screenHeight, const int screenWidth,
                                TripleBuffer<std::vector<float>> &sharedBuffer)
     : screenHeight(screenHeight), screenWidth(screenWidth),
       share_ag(sharedBuffer), smoothState(BUCKET_COUNT, 0.0f),
-      smearedState(BUCKET_COUNT, 0.0f), colorLUT(), target(), mCamera() {
-  visBars.reserve(BUCKET_COUNT * 2);
-}
+      smearedState(BUCKET_COUNT, 0.0f), colorLUT(), target() {}
 
 void GraphicsThread::PrecomputeGradient() {
   for (int i = 0; i < 256; ++i) {
     const float t = i / 255.0f;
     if (t < 0.8f) {
-      colorLUT[i] = ColorLerp(BLACK, NEON_CYAN, t * 1.25f);
+      colorLUT[i] = ColorLerp(NEON_PURPLE, NEON_CYAN, t);
     } else {
       const float rangeT = (t - 0.8f) * 5.0f;
-      Color base = ColorLerp(NEON_CYAN, ICE_BLUE, rangeT);
+      Color base = ColorLerp(NEON_CYAN, NEON_PINK, rangeT);
 
-      if (t > 0.9f) {
-        const float whiteT = (t - 0.9f) * 10.0f;
-        base = ColorLerp(base, WHITE, whiteT);
-      }
+      // if (t > 0.9f) {
+      //   const float whiteT = (t - 0.9f) * 10.0f;
+      //   base = ColorLerp(base, WHITE, whiteT);
+      // }
       colorLUT[i] = base;
     }
   }
@@ -100,8 +104,6 @@ void GraphicsThread::Initialize() {
 
   SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
   InitWindow(screenWidth, screenHeight, "Audio Visualizer");
-
-  const auto scaledH = static_cast<float>(screenHeight);
   const auto scaledW = static_cast<float>(screenWidth);
 
   target = LoadRenderTexture(screenWidth, screenHeight);
@@ -110,23 +112,20 @@ void GraphicsThread::Initialize() {
   readBuffer = share_ag.consumerReadBuffer();
   particleGenerator.Init();
 
-  const float halfH = scaledH * 0.5f;
   const float halfW = scaledW * 0.5f;
   const float availableW = halfW - (BAR_SPACING * BUCKET_COUNT);
   halfWidth = halfW;
   barWidth = std::max(std::floor(availableW / BUCKET_COUNT), 1.0f);
 
-  mCamera = {{halfW, halfH}, {halfW, halfH}, 0.0f, 1.0f};
-  this->PrecomputeGradient(); // Initialize Color Gradient LUT
+  // initialize color gradient look up table
+  this->PrecomputeGradient();
 }
 
 bool GraphicsThread::Swap() { return share_ag.swapConsumer(this->readBuffer); }
 
 void GraphicsThread::Update() {
-
   // Recycle used buffer and get fresh audio data
   this->Swap();
-
   if (!this->readBuffer || this->readBuffer->empty()) {
     return;
   }
@@ -134,24 +133,27 @@ void GraphicsThread::Update() {
 }
 
 void GraphicsThread::fftProcess() {
-  const auto NUM_BINS = static_cast<float>(this->readBuffer->size()) * 0.5f;
+  constexpr float maxFreqCrop = 0.8f;
+  const auto rawBins = static_cast<float>(this->readBuffer->size());
+  const float numBins = rawBins * maxFreqCrop;
   const float dt = GetFrameTime();
 
-  for (int bar = 0; bar < BUCKET_COUNT; ++bar) {
-    const auto barFloat = static_cast<float>(bar);
+  constexpr float GRAVITY = 1.2f;
 
-    const float tStart = barFloat / BUCKET_COUNT;
-    const float tEnd = (barFloat + 1.0f) / BUCKET_COUNT;
+  for (int visualBar = 0; visualBar < BUCKET_COUNT; ++visualBar) {
+    const auto fBar = static_cast<float>(visualBar);
+    const float tStart = fBar / BUCKET_COUNT;
+    const float tEnd = (fBar + 1.0f) / BUCKET_COUNT;
 
-    int fStart = static_cast<int>(powf(tStart, 2.5f) * NUM_BINS);
-    int fEnd = static_cast<int>(powf(tEnd, 2.5f) * NUM_BINS);
+    int fStart = static_cast<int>(powf(tStart, 2.5f) * numBins);
+    int fEnd = static_cast<int>(powf(tEnd, 2.5f) * numBins);
 
     if (fStart < 2)
       fStart = 2;
     if (fEnd <= fStart)
       fEnd = fStart + 1;
-    if (fEnd > static_cast<int>(NUM_BINS))
-      fEnd = static_cast<int>(NUM_BINS);
+    if (fEnd > static_cast<int>(numBins))
+      fEnd = static_cast<int>(numBins);
 
     float sum = 0.0f;
     int count = 0;
@@ -163,9 +165,17 @@ void GraphicsThread::fftProcess() {
 
     const float val = (count > 0) ? sum / static_cast<float>(count) : 0.0f;
 
-    smoothState[bar] += (val - smoothState[bar]) * SMOOTHNESS * dt;
-    smearedState[bar] +=
-        (smoothState[bar] - smearedState[bar]) * SMEAREDNESS * dt;
+    smoothState[visualBar] += (val - smoothState[visualBar]) * SMOOTHNESS * dt;
+
+    if (smoothState[visualBar] > smearedState[visualBar]) {
+      smearedState[visualBar] = smoothState[visualBar];
+    } else {
+      smearedState[visualBar] -= GRAVITY * dt;
+      if (smearedState[visualBar] < 0.0f) smearedState[visualBar] = 0.0f;
+    }
+
+    // smearedState[visualBar] +=
+    //  (smoothState[visualBar] - smearedState[visualBar]) * SMEAREDNESS * dt;
   }
 }
 
@@ -196,7 +206,7 @@ void GraphicsThread::prepareVisuals() {
   const Color ghostColor = ColorLerp(GHOST_BASE, GHOST_DROP, bassShock);
 
   visBars.clear();
-  visBars.reserve(BUCKET_COUNT * 2);
+  visBars.reserve(BUCKET_COUNT * 3);
 
   Color targetDropTop = DROP_TOP;
   float currentOffset = 0.0f;
@@ -206,7 +216,7 @@ void GraphicsThread::prepareVisuals() {
 
   if (bassShock > 0.8f) {
     targetDropTop =
-        ColorLerp(DROP_TOP, {255, 255, 200, 255}, (bassShock - 0.8f) * 5.0f);
+        ColorLerp(DROP_TOP, {255, 215, 0, 255}, (bassShock - 0.8f) * 2.0f);
   }
 
   for (int i = 0; i < BUCKET_COUNT; ++i) {
@@ -218,9 +228,9 @@ void GraphicsThread::prepareVisuals() {
       continue;
     }
 
-    const int colorIndex = static_cast<int>(std::min(smooth, 1.0f) * 255.0f);
+    const int colorIndex = static_cast<int>(std::min(smooth * 155.0f, 255.0f));
     const Color normalTop = colorLUT[colorIndex];
-    constexpr Color normalBottom = DARK_PURPLE;
+    const Color normalBottom = ColorAlpha(normalTop, 0.2f);
 
     const int xRight = static_cast<int>(halfWidth + currentOffset);
     const int xLeft = static_cast<int>(halfWidth - currentOffset - barWidth);
@@ -231,8 +241,10 @@ void GraphicsThread::prepareVisuals() {
     const int ghostY = centerY - (ghostH / 2);
     const int mainY = centerY - (mainH / 2);
 
-    const Color finalTop = ColorLerp(normalTop, targetDropTop, bassShock);
-    const Color finalBot = ColorLerp(normalBottom, DROP_BOTTOM, bassShock);
+    float intensity = std::min(bassShock, 0.6f);
+    const Color finalTop = ColorLerp(normalTop, targetDropTop, intensity);
+    const Color finalBot =
+        ColorLerp(normalBottom, DROP_BOTTOM, bassShock * 0.3f);
 
     auto solidBars = [=](const Bar &bar) {
       const SolidDrawer sd(finalTop, finalBot);
@@ -248,20 +260,20 @@ void GraphicsThread::prepareVisuals() {
 
     auto ghostBars = [ghostDrawer](const Bar &bar) { ghostDrawer(bar); };
 
-    if (mainH > 0) {
-      visBars.emplace_back(
-          Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, mainY},
-          solidBars);
-
-      visBars.emplace_back(
-          Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, mainY},
-          reflectionBars);
-    }
-
     if (ghostH > 0) {
       visBars.emplace_back(
           Bar{ghostH, static_cast<int>(barWidth), xLeft, xRight, ghostY},
           ghostBars);
+    }
+
+    if (mainH > 0) {
+      visBars.emplace_back(
+          Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, mainY},
+          reflectionBars);
+
+      visBars.emplace_back(
+          Bar{mainH, static_cast<int>(barWidth), xLeft, xRight, mainY},
+          solidBars);
     }
 
     currentOffset += stride;
@@ -334,9 +346,8 @@ void GraphicsThread::ScreenShake() {
     }
   }
 
-  constexpr float BASS_THRESHOLD = 0.6f;
-  if (bass > BASS_THRESHOLD) {
-    const float impact = (bass - BASS_THRESHOLD) * 1.5f;
+  if (bass > 0.6f) {
+    const float impact = (bass - 0.6f) * 1.5f;
     mScreenTrauma += impact;
     if (mScreenTrauma > 1.0f) {
       mScreenTrauma = 1.0f;
@@ -387,62 +398,15 @@ void GraphicsThread::DrawVisualBars() const {
 
 void GraphicsThread::Draw() {
   this->prepareVisuals();
-
-  const float dt = GetFrameTime();
-  const auto time = static_cast<float>(GetTime());
-
-  float rawBass = smoothState.empty() ? 0.0f : smoothState[1];
-  if (std::isnan(rawBass)) {
-    rawBass = 0.0f;
-  }
-
-  const float bass = std::clamp(rawBass, 0.0f, 1.0f);
-  if (bass > 0.6f) {
-    mBeatEnergy += (bass - 0.6f) * 5.0f * dt;
-  }
-
-  mBeatEnergy -= 10.0f * dt;
-  mBeatEnergy = std::clamp(mBeatEnergy, 0.0f, 1.0f);
-
-  float zoomOffset = 0.0f;
-  if (mBeatEnergy > 0.4f) {
-    zoomOffset = (mBeatEnergy - 0.4f) * 0.25f;
-    zoomOffset = std::min(zoomOffset, 0.2f);
-  }
-
-  const float targetZoom = 1.0f + zoomOffset;
-  if (targetZoom > mCamera.zoom) {
-    mCamera.zoom = targetZoom;
-  } else {
-    mCamera.zoom = Lerp(mCamera.zoom, targetZoom, 15.0f * dt);
-  }
-
-  const float sway = sinf(time * 0.5f) * 0.02f;
-  mCamera.rotation = (sway * RAD2DEG) + (mBeatEnergy * 2.0f);
-
   BeginTextureMode(target);
-
   BeginBlendMode(BLEND_ALPHA);
   DrawRectangle(0, 0, screenWidth, screenHeight, Color{0, 0, 0, 60});
   EndBlendMode();
-
-  BeginMode2D(mCamera);
-
-  if (mBeatEnergy > 0.1f) {
-    BeginBlendMode(BLEND_ADDITIVE);
-    const Color glowCol = ColorAlpha(NEON_ORANGE, mBeatEnergy * 0.2f);
-    DrawCircleGradient(static_cast<int>(halfWidth),
-                       static_cast<int>(screenHeight / 2), halfWidth * 1.5f,
-                       glowCol, BLANK);
-    EndBlendMode();
-  }
-
   // Drawing Main Drawables (Bars, Particles, GridLines)
+
   DrawGridLines();
   particleGenerator.Draw();
   DrawVisualBars();
-
-  EndMode2D();
   EndTextureMode();
   this->ScreenShake();
 }

@@ -17,8 +17,9 @@
 std::atomic_bool doneFlag(false);
 int main() {
   // select to play any file in demos directory
-  std::string filePath = "demos/audio4.wav";
-  TripleBuffer<std::vector<float>> tripleBuffer(BIN_COUNT);
+  std::string filePath = "demos/audio3.wav";
+  constexpr size_t binCount = FFT_SIZE / 2;
+  TripleBuffer<std::vector<float>> tripleBuffer(binCount);
 
   // SPSC lock-free ring buffer used by audio callback and analyzer
 
@@ -40,9 +41,9 @@ int main() {
   GraphicsThread visualizer{SCREEN_HEIGHT, SCREEN_WIDTH, tripleBuffer};
   visualizer.Initialize(); // initialize window and constants
   while (!WindowShouldClose()) {
-    visualizer.Update();
     BeginDrawing();
     ClearBackground(BLACK);
+    visualizer.Update();
     visualizer.Draw();
     DrawFPS(10, 10);
     EndDrawing();
